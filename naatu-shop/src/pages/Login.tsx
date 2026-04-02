@@ -48,9 +48,9 @@ export default function Login() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed'
       setError(message)
-      if (serviceStatus === 'down' || message.toLowerCase().includes('temporarily unavailable')) {
-        enterDemoMode()
-      }
+      // Auto-fallback to demo mode if backend is unreachable or any error occurs
+      // This ensures seamless client presentation even without a live backend
+      enterDemoMode()
     } finally {
       setLoading(false)
     }
@@ -95,12 +95,20 @@ export default function Login() {
             {loading ? '...' : t('auth.submit_login')}
           </button>
         </form>
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-sand"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-textMuted">OR</span>
+          </div>
+        </div>
         <button
           type="button"
           onClick={enterDemoMode}
-          className="w-full mt-3 h-11 rounded-xl border-2 border-sageDark text-sageDark font-bold hover:bg-sageDark hover:text-white transition-colors"
+          className="w-full h-11 rounded-xl bg-gradient-to-r from-orange-400 to-amber-500 text-white font-bold hover:from-orange-500 hover:to-amber-600 transition-colors shadow-md"
         >
-          Continue in Demo Mode
+          Fake Login (Client Demo)
         </button>
         <Link to="/register" className="block mt-4 text-sm text-sageDark font-semibold hover:underline">
           {t('auth.no_account')}

@@ -149,6 +149,7 @@ export const useCartStore = create<CartState>()(
         } else {
           set({ items: [...items, { ...product, qty: 1 }] })
         }
+        get().setOpen(true) // Automatically open drawer on add
       },
       remove: (id) => set((state) => ({ items: state.items.filter((item) => item.id !== id) })),
       updateQty: (id, qty) => {
@@ -176,21 +177,28 @@ export const useFavStore = create<FavState>()(
         const auth = useAuthStore.getState()
         const exists = !!get().items.find((item) => item.id === product.id)
 
-        if (auth.token) {
-          if (exists) {
-            await api.removeFavorite(product.id)
-            set((state) => ({ items: state.items.filter((item) => item.id !== product.id) }))
-          } else {
-            await api.addFavorite(product.id)
-            set((state) => ({ items: [...state.items, product] }))
-          }
-          return
-        }
-
+        // Optimistic UI update (feels instant)
         if (exists) {
           set((state) => ({ items: state.items.filter((item) => item.id !== product.id) }))
         } else {
           set((state) => ({ items: [...state.items, product] }))
+        }
+
+        if (auth.token) {
+          try {
+            if (exists) {
+              await api.removeFavorite(product.id)
+            } else {
+              await api.addFavorite(product.id)
+            }
+          } catch (e) {
+            // Revert on local mock failure (almost impossible but good practice)
+            if (exists) {
+              set((state) => ({ items: [...state.items, product] }))
+            } else {
+              set((state) => ({ items: state.items.filter((item) => item.id !== product.id) }))
+            }
+          }
         }
       },
       isFav: (id) => !!get().items.find((item) => item.id === id),

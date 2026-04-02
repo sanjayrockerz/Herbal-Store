@@ -1,3 +1,5 @@
+import fallbackProducts from '../data/products'
+
 export interface ApiProduct {
   id: number
   name: string
@@ -7,6 +9,7 @@ export interface ApiProduct {
   benefits: string
   image_url?: string
   imageUrl?: string
+  image?: string
   stock: number
 }
 
@@ -31,128 +34,142 @@ export interface AuthResponse {
   }
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-
-function getHeaders(auth = false): HeadersInit {
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  }
-
-  if (auth) {
-    const token = localStorage.getItem('srisiddha-token')
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
-    }
-  }
-
-  return headers
+// Mock Database helpers for seamless client demo
+const getDb = (key: string, defaultValue: any) => {
+  const data = localStorage.getItem(`srisiddha-db-${key}`)
+  return data ? JSON.parse(data) : defaultValue
+}
+const setDb = (key: string, value: any) => {
+  localStorage.setItem(`srisiddha-db-${key}`, JSON.stringify(value))
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  let response: Response
-
-  try {
-    response = await fetch(`${API_URL}${path}`, options)
-  } catch (error) {
-    throw new Error('Unable to reach the server. Please check your connection and try again.')
-  }
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({ message: 'Request failed' }))
-    throw new Error(payload.message || 'Service is temporarily unavailable. Please try again.')
-  }
-
-  return response.json()
+// Initialize mock DBs
+if (!localStorage.getItem('srisiddha-db-products')) {
+  setDb('products', fallbackProducts)
 }
+if (!localStorage.getItem('srisiddha-db-orders')) {
+  setDb('orders', [])
+}
+if (!localStorage.getItem('srisiddha-db-favorites')) {
+  setDb('favorites', [])
+}
+
+const mockDelay = () => new Promise(res => setTimeout(res, 200))
 
 export const api = {
-  health: () => request<{ status: string; service: string }>('/health'),
+  health: async () => { await mockDelay(); return { status: 'ok', service: 'mock' } },
 
-  register: (payload: RegisterPayload) =>
-    request<AuthResponse>('/auth/register', {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(payload),
-    }),
+  register: async (payload: RegisterPayload) => {
+    await mockDelay()
+    return { token: 'demo-token', user: { id: 1, name: payload.name, email: payload.email, role: 'admin' as const } }
+  },
 
-  login: (payload: LoginPayload) =>
-    request<AuthResponse>('/auth/login', {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(payload),
-    }),
+  login: async (payload: LoginPayload) => {
+    await mockDelay()
+    return { token: 'demo-token', user: { id: 1, name: 'Admin', email: payload.email, role: 'admin' as const } }
+  },
 
-  me: () =>
-    request<AuthResponse['user']>('/auth/me', {
-      method: 'GET',
-      headers: getHeaders(true),
-    }),
+  me: async () => {
+    await mockDelay()
+    return { id: 1, name: 'Admin', email: 'admin@srisiddha.com', role: 'admin' as const }
+  },
 
-  getProducts: (query?: string) => request<ApiProduct[]>(`/products${query ? `?${query}` : ''}`),
+  getProducts: async (query?: string) => {
+    await mockDelay()
+    return getDb('products', []) as ApiProduct[]
+  },
 
-  getProductById: (id: number) => request<ApiProduct>(`/products/${id}`),
+  getProductById: async (id: number) => {
+    await mockDelay()
+    const products = getDb('products', [])
+    const p = products.find((p: any) => p.id === id)
+    if (!p) throw new Error('Product not found')
+    return p as ApiProduct
+  },
 
-  createProduct: (payload: Record<string, unknown>) =>
-    request<ApiProduct>('/products', {
-      method: 'POST',
-      headers: getHeaders(true),
-      body: JSON.stringify(payload),
-    }),
+  createProduct: async (payload: Record<string, unknown>) => {
+    await mockDelay()
+    const products = getDb('products', [])
+    // @ts-ignore
+    const newProduct = { ...payload, id: Date.now(), image: payload.imageUrl || '/assets/images/default-herb.jpg' }
+    setDb('products', [newProduct, ...products])
+    return newProduct as ApiProduct
+  },
 
-  updateProduct: (id: number, payload: Record<string, unknown>) =>
-    request<ApiProduct>(`/products/${id}`, {
-      method: 'PUT',
-      headers: getHeaders(true),
-      body: JSON.stringify(payload),
-    }),
+  updateProduct: async (id: number, payload: Record<string, unknown>) => {
+    await mockDelay()
+    let products = getDb('products', [])
+    let updated = null
+    products = products.map((p: any) => {
+      if (p.id === id) {
+        updated = { ...p, ...payload }
+        return updated
+      }
+      return p
+    })
+    setDb('products', products)
+    return updated as unknown as ApiProduct
+  },
 
-  deleteProduct: (id: number) =>
-    request<{ message: string }>(`/products/${id}`, {
-      method: 'DELETE',
-      headers: getHeaders(true),
-    }),
+  deleteProduct: async (id: number) => {
+    await mockDelay()
+    const products = getDb('products', [])
+    setDb('products', products.filter((p: any) => p.id !== id))
+    return { message: 'Deleted successfully' }
+  },
 
-  getFavorites: () =>
-    request<ApiProduct[]>('/products/user/favorites/list', {
-      method: 'GET',
-      headers: getHeaders(true),
-    }),
+  getFavorites: async () => {
+    await mockDelay()
+    const favIds = getDb('favorites', [])
+    const products = getDb('products', [])
+    return products.filter((p: any) => favIds.includes(p.id)) as ApiProduct[]
+  },
 
-  addFavorite: (productId: number) =>
-    request<{ message: string }>('/products/user/favorites', {
-      method: 'POST',
-      headers: getHeaders(true),
-      body: JSON.stringify({ productId }),
-    }),
+  addFavorite: async (productId: number) => {
+    await mockDelay()
+    const favIds = getDb('favorites', [])
+    if (!favIds.includes(productId)) setDb('favorites', [...favIds, productId])
+    return { message: 'Added to favorites' }
+  },
 
-  removeFavorite: (productId: number) =>
-    request<{ message: string }>(`/products/user/favorites/${productId}`, {
-      method: 'DELETE',
-      headers: getHeaders(true),
-    }),
+  removeFavorite: async (productId: number) => {
+    await mockDelay()
+    const favIds = getDb('favorites', [])
+    setDb('favorites', favIds.filter((id: number) => id !== productId))
+    return { message: 'Removed from favorites' }
+  },
 
-  createOrder: (items: Array<{ productId: number; quantity: number }>) =>
-    request('/orders', {
-      method: 'POST',
-      headers: getHeaders(true),
-      body: JSON.stringify({ items }),
-    }),
+  createOrder: async (items: Array<{ productId: number; quantity: number }>) => {
+    await mockDelay()
+    const orders = getDb('orders', [])
+    const products = getDb('products', [])
+    
+    let totalPrice = 0
+    items.forEach(item => {
+        const p = products.find((p: any) => p.id === item.productId)
+        if (p) totalPrice += (p.price * item.quantity)
+    })
+    
+    const newOrder = { id: Date.now(), items, totalPrice, createdAt: new Date().toISOString() }
+    setDb('orders', [newOrder, ...orders])
+    return newOrder
+  },
 
-  getMyOrders: () =>
-    request('/orders/mine', {
-      method: 'GET',
-      headers: getHeaders(true),
-    }),
+  getMyOrders: async () => {
+    await mockDelay()
+    return getDb('orders', [])
+  },
 
-  getAllOrders: () =>
-    request('/orders/admin/all', {
-      method: 'GET',
-      headers: getHeaders(true),
-    }),
+  getAllOrders: async () => {
+    await mockDelay()
+    return getDb('orders', [])
+  },
 
-  getSummary: () =>
-    request<{ totalProducts: number; totalOrders: number; totalRevenue: number }>('/orders/admin/summary', {
-      method: 'GET',
-      headers: getHeaders(true),
-    }),
+  getSummary: async () => {
+    await mockDelay()
+    const products = getDb('products', [])
+    const orders = getDb('orders', [])
+    const totalRevenue = orders.reduce((sum: number, o: any) => sum + o.totalPrice, 0)
+    return { totalProducts: products.length, totalOrders: orders.length, totalRevenue }
+  },
 }

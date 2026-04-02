@@ -8,8 +8,6 @@ import { CartDrawer, FavoritesDrawer } from './Drawers'
 
 export default function Navbar() {
   const [query, setQuery] = useState('')
-  const [showCart, setShowCart] = useState(false)
-  const [showFav, setShowFav] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const count = useCartStore(s => s.count())
   const favCount = useFavStore(s => s.items.length)
@@ -75,11 +73,11 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-1">
-            <motion.button whileTap={{ scale: 0.88 }} onClick={() => setShowFav(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => useFavStore.getState().setOpen(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
               <Heart size={20} className="text-textMuted" />
               {favCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{favCount}</span>}
             </motion.button>
-            <motion.button whileTap={{ scale: 0.88 }} onClick={() => setShowCart(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => useCartStore.getState().setOpen(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
               <ShoppingCart size={20} className="text-textMuted" />
               {count > 0 && <span className="absolute -top-0.5 -right-0.5 bg-sageDark text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{count}</span>}
             </motion.button>
@@ -115,8 +113,8 @@ export default function Navbar() {
         </AnimatePresence>
       </header>
 
-      <CartDrawer open={showCart} onClose={() => setShowCart(false)} />
-      <FavoritesDrawer open={showFav} onClose={() => setShowFav(false)} />
+      <CartDrawer open={useCartStore(s => s.isOpen)} onClose={() => useCartStore.getState().setOpen(false)} />
+      <FavoritesDrawer open={useFavStore(s => s.isOpen)} onClose={() => useFavStore.getState().setOpen(false)} />
     </>
   )
 }

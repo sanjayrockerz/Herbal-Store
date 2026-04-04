@@ -1,0 +1,223 @@
+import { useEffect, useState } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
+import { useAuthStore } from '../store/store'
+import { api, type ApiOrder } from '../services/api'
+import { useLangStore } from '../store/langStore'
+import { Package, User, LogOut, ChevronDown, ChevronUp, ShoppingBag, Settings } from 'lucide-react'
+import { isSupabaseConfigured } from '../lib/supabase'
+
+const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  pending: { bg: '#FEF3C7', text: '#92400E', label: 'Pending' },
+  processing: { bg: '#DBEAFE', text: '#1E40AF', label: 'Processing' },
+  completed: { bg: '#D1FAE5', text: '#065F46', label: 'Completed' },
+  cancelled: { bg: '#FEE2E2', text: '#991B1B', label: 'Cancelled' },
+}
+
+export default function Profile() {
+  const { user, logout } = useAuthStore()
+  const { lang } = useLangStore()
+  const navigate = useNavigate()
+  const [orders, setOrders] = useState<ApiOrder[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'orders' | 'info'>('orders')
+
+  useEffect(() => {
+    if (!user) { navigate('/login'); return }
+    if (user.role === 'admin') { setLoading(false); return }
+
+    api.getMyOrders(user.id).then(data => {
+      setOrders(data)
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [user, navigate])
+
+  if (!user) return null
+
+  const handleLogout = async () => {
+    await logout()
+    navigate('/')
+  }
+
+  return (
+    <div className="bg-bgMain min-h-screen py-10">
+      <div className="max-w-5xl mx-auto px-4">
+        <h1 className="text-3xl font-bold font-headline text-textMain mb-8">My Account</h1>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Sidebar */}
+          <div className="md:col-span-1">
+            <div className="bg-white p-6 rounded-2xl shadow-soft border border-sand/50">
+              {/* Avatar */}
+              <div className="flex flex-col items-center text-center mb-6 pb-6 border-b border-sand">
+                <div className="w-20 h-20 bg-gradient-to-br from-sage to-sageDark rounded-full flex items-center justify-center mb-3">
+                  <span className="text-white text-3xl font-bold">{user.name.charAt(0).toUpperCase()}</span>
+                </div>
+                <h2 className="text-lg font-bold text-textMain">{user.name}</h2>
+                <p className="text-sm text-textMuted">{user.email}</p>
+                {user.mobile && <p className="text-sm text-textMuted">{user.mobile}</p>}
+                <span className={`mt-2 px-3 py-0.5 rounded-full text-xs font-bold ${user.role === 'admin' ? 'bg-sageDark/20 text-sageDark' : 'bg-blue-100 text-blue-700'}`}>
+                  {user.role === 'admin' ? '⚡ Admin' : '🛒 Customer'}
+                </span>
+              </div>
+
+              {/* Nav */}
+              <div className="space-y-2">
+                <button onClick={() => setActiveTab('orders')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-colors ${activeTab === 'orders' ? 'bg-sageDark/10 text-sageDark' : 'text-textMuted hover:bg-bgMain'}`}>
+                  <Package size={16} /> Order History
+                </button>
+                <button onClick={() => setActiveTab('info')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-colors ${activeTab === 'info' ? 'bg-sageDark/10 text-sageDark' : 'text-textMuted hover:bg-bgMain'}`}>
+                  <User size={16} /> Account Info
+                </button>
+                {user.role === 'admin' && (
+                  <button onClick={() => navigate('/admin')}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm text-textMuted hover:bg-bgMain transition-colors">
+                    <Settings size={16} /> Admin Dashboard
+                  </button>
+                )}
+                <button onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm text-red-500 hover:bg-red-50 transition-colors">
+                  <LogOut size={16} /> Logout
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Main */}
+          <div className="md:col-span-2">
+            {/* Account Info */}
+            {activeTab === 'info' && (
+              <div className="bg-white p-6 rounded-2xl shadow-soft border border-sand/50">
+                <h2 className="text-xl font-bold text-textMain mb-6 flex items-center gap-2">
+                  <User size={20} className="text-sageDark" /> Account Information
+                </h2>
+                <div className="space-y-4">
+                  {[
+                    { label: 'Full Name', value: user.name },
+                    { label: 'Email', value: user.email || '—' },
+                    { label: 'Mobile', value: user.mobile || '—' },
+                    { label: 'Account Type', value: user.role === 'admin' ? 'Administrator' : 'Customer' },
+                  ].map(item => (
+                    <div key={item.label} className="flex items-start gap-4 p-4 bg-bgMain rounded-xl">
+                      <div>
+                        <p className="text-xs font-bold text-textMuted uppercase tracking-wide">{item.label}</p>
+                        <p className="font-bold text-textMain mt-1">{item.value}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {isSupabaseConfigured && (
+                  <p className="text-xs text-textMuted mt-6 bg-blue-50 px-4 py-3 rounded-xl">
+                    ✉️ Your account is linked to your email. To update your profile, contact support.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Orders */}
+            {activeTab === 'orders' && (
+              <div className="bg-white p-6 rounded-2xl shadow-soft border border-sand/50">
+                <h2 className="text-xl font-bold text-textMain mb-6 flex items-center gap-2">
+                  <Package size={20} className="text-sageDark" /> Order History
+                  <span className="ml-auto text-sm font-normal text-textMuted">{orders.length} orders</span>
+                </h2>
+
+                {loading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <span className="w-8 h-8 border-4 border-sand border-t-sageDark rounded-full animate-spin" />
+                  </div>
+                ) : orders.length === 0 ? (
+                  <div className="text-center py-16">
+                    <ShoppingBag size={48} className="mx-auto text-textMuted opacity-30 mb-4" />
+                    <p className="font-bold text-textMain mb-2">No orders yet</p>
+                    <p className="text-sm text-textMuted mb-6">Start shopping to see your orders here</p>
+                    <Link to="/products"
+                      className="inline-block bg-sageDark hover:bg-sageDeep text-white font-bold px-6 py-3 rounded-xl transition-colors">
+                      Browse Products
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {orders.map((o) => {
+                      const statusInfo = STATUS_COLORS[o.status] || STATUS_COLORS.pending
+                      const isExpanded = expanded === o.id
+                      return (
+                        <div key={o.id} className="border border-sand rounded-xl overflow-hidden">
+                          <div
+                            onClick={() => setExpanded(isExpanded ? null : o.id)}
+                            className="flex flex-wrap gap-4 items-center justify-between p-4 cursor-pointer hover:bg-bgMain transition-colors"
+                          >
+                            <div>
+                              <p className="font-bold text-sm text-textMain">{o.invoice_no}</p>
+                              <p className="text-xs text-textMuted mt-0.5">
+                                {new Date(o.created_at).toLocaleDateString('en-GB')} · {o.items?.length || 0} items
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: statusInfo.bg, color: statusInfo.text }}>
+                                {statusInfo.label}
+                              </span>
+                              <span className="font-bold text-textMain">₹{o.total}</span>
+                              {isExpanded ? <ChevronUp size={16} className="text-textMuted" /> : <ChevronDown size={16} className="text-textMuted" />}
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="border-t border-sand bg-white p-4">
+                              <div className="mb-4 pb-4 border-b border-sand/50 text-sm grid grid-cols-2 gap-3">
+                                <div>
+                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">Customer</p>
+                                  <p className="font-medium text-textMain">{o.customer_name}</p>
+                                  <p className="text-textMuted">{o.phone}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">Address</p>
+                                  <p className="text-textMuted">{o.address}</p>
+                                </div>
+                              </div>
+
+                              <table className="w-full text-sm">
+                                <thead className="text-left text-textMuted border-b border-sand">
+                                  <tr>
+                                    <th className="pb-2 font-medium">Item</th>
+                                    <th className="pb-2 font-medium text-center">Qty</th>
+                                    <th className="pb-2 font-medium text-right">Price</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-sand/30">
+                                  {(o.items || []).map((item: any, i: number) => {
+                                    const pName = lang === 'ta' && item.nameTa ? item.nameTa : item.name
+                                    const effPrice = item.offerPrice || item.price
+                                    return (
+                                      <tr key={i}>
+                                        <td className="py-2 font-medium text-textMain">{pName}</td>
+                                        <td className="py-2 text-center text-textMuted">{item.qty}</td>
+                                        <td className="py-2 text-right font-bold text-textMain">₹{effPrice * item.qty}</td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+
+                              <div className="mt-4 pt-4 border-t border-sand text-sm space-y-1 text-right">
+                                <p className="text-textMuted">Subtotal: ₹{o.subtotal}</p>
+                                <p className="text-textMuted">Shipping: {o.shipping === 0 ? 'FREE' : `₹${o.shipping}`}</p>
+                                <p className="font-bold text-textMain text-base">Total: ₹{o.total}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

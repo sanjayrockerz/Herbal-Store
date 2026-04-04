@@ -43,8 +43,10 @@ export default function Products() {
       out = out.filter(p => 
         p.name.toLowerCase().includes(q) || 
         p.benefits.toLowerCase().includes(q) ||
-        (p.nameTa && p.nameTa.includes(q)) ||
-        (p.benefitsTa && p.benefitsTa.includes(q))
+        (p.nameTa && p.nameTa.toLowerCase().includes(q)) ||
+        (p.benefitsTa && p.benefitsTa.toLowerCase().includes(q)) ||
+        p.category.toLowerCase().includes(q) ||
+        p.remedy.some(r => r.toLowerCase().includes(q))
       )
     }
     if (activeCats.length) out = out.filter(p => activeCats.includes(p.category))

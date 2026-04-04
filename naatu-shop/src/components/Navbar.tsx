@@ -12,7 +12,6 @@ export default function Navbar() {
   const count = useCartStore(s => s.count())
   const favCount = useFavStore(s => s.items.length)
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
   const { t, lang, setLang } = useLangStore()
   const navigate = useNavigate()
 
@@ -61,12 +60,7 @@ export default function Navbar() {
             <Link to="/favorites" className="hover:text-textMain transition-colors">{t('nav.favorites')}</Link>
             {user?.role === 'admin' && <Link to="/admin" className="hover:text-textMain transition-colors">{t('nav.dashboard')}</Link>}
             {user ? (
-              <button
-                onClick={logout}
-                className="hover:text-textMain transition-colors"
-              >
-                {t('nav.logout')}
-              </button>
+              <Link to="/profile" className="hover:text-textMain transition-colors flex items-center gap-1.5"><Heart size={14} className="hidden" /> Profile</Link>
             ) : (
               <Link to="/login" className="hover:text-textMain transition-colors">{t('nav.login')}</Link>
             )}

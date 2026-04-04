@@ -72,16 +72,6 @@ export default function Home() {
               </span>
             </motion.div>
 
-            <h1 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 900, color: C.textMain, lineHeight: 1.08, fontSize: 'clamp(2.8rem, 6vw, 4.5rem)', margin: 0 }}>
-              <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="block">
-                {t('hero.title1')}
-              </motion.span>
-              <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }} className="relative block" style={{ color: C.sageDark }}>
-                {t('hero.title2')}
-                <svg className="absolute left-0 w-full" style={{ bottom: -4 }} viewBox="0 0 300 12" fill="none"><path d="M2 8 Q75 2 150 8 Q225 14 298 8" stroke={C.sage} strokeWidth="3.5" strokeLinecap="round" fill="none"/></svg>
-              </motion.span>
-            </h1>
-
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} style={{ color: C.textMuted, fontSize: 17, lineHeight: 1.7, maxWidth: 480, margin: 0 }}>
               {t('hero.subtitle')}
             </motion.p>

@@ -1,78 +1,120 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
-import { BarChart2, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { api } from '../services/api'
-import { useLangStore } from '../store/langStore'
-import { type Product, useProductStore } from '../store/store'
-
-interface Summary {
-  totalProducts: number
-  totalOrders: number
-  totalRevenue: number
-}
-
-const initialForm = {
-  name: '',
-  category: 'Herbal Powder',
-  price: 0,
-  description: '',
-  benefits: '',
-  imageUrl: '/assets/images/default-herb.jpg',
-  stock: 10,
-}
+import { useProductStore } from '../store/store'
+import { BarChart2, Plus, Trash2, Edit2, Tag, List } from 'lucide-react'
 
 export default function Dashboard() {
-  const { t } = useLangStore()
-  const { products, fetchProducts, removeProduct } = useProductStore()
-  const [summary, setSummary] = useState<Summary>({ totalProducts: 0, totalOrders: 0, totalRevenue: 0 })
-  const [orders, setOrders] = useState<Array<{ id: number; totalPrice: number; createdAt: string }>>([])
-  const [form, setForm] = useState(initialForm)
+  const { products, fetchProducts } = useProductStore()
+  const [tab, setTab] = useState<'overview' | 'products' | 'categories'>('overview')
+  
+  // Overview
+  const [summary, setSummary] = useState({ totalProducts: 0, totalOrders: 0, totalRevenue: 0 })
+  const [orders, setOrders] = useState<any[]>([])
+  
+  // Custom states
+  const [cats, setCats] = useState<any[]>([])
+  const [tags, setTags] = useState<any[]>([])
+  const [newCat, setNewCat] = useState({ name_en: '', name_ta: '' })
+  const [newTag, setNewTag] = useState({ name_en: '', name_ta: '' })
+  
+  // Product form
+  const [editingProd, setEditingProd] = useState<any>(null)
+  const [prodForm, setProdForm] = useState<any>({
+    name: '', nameTa: '', category: '', remedy: [],
+    price: 0, offerPrice: '', stock: 10,
+    description: '', descriptionTa: '', benefits: '', benefitsTa: '',
+    image: '/assets/images/default-herb.jpg'
+  })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const cards = useMemo(
-    () => [
-      { label: t('admin.products'), value: summary.totalProducts },
-      { label: t('admin.orders'), value: summary.totalOrders },
-      { label: t('admin.revenue'), value: `₹${summary.totalRevenue.toFixed(2)}` },
-    ],
-    [summary, t],
-  )
 
   useEffect(() => {
     fetchProducts()
-    api.getSummary().then(setSummary).catch(() => setError('Failed to load summary'))
-    api
-      .getAllOrders()
-      .then((rows) => setOrders(rows as Array<{ id: number; totalPrice: number; createdAt: string }>))
-      .catch(() => setError('Failed to load orders'))
-  }, [fetchProducts])
+    loadData()
+  }, [])
 
-  const onCreate = async (event: FormEvent) => {
-    event.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      await api.createProduct(form)
-      setForm(initialForm)
-      await fetchProducts()
-      const refreshed = await api.getSummary()
-      setSummary(refreshed)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add product')
-    } finally {
-      setLoading(false)
+  const loadData = async () => {
+    setSummary(await api.getSummary())
+    setOrders(await api.getAllOrders() as any)
+    setCats(await api.getCategories())
+    setTags(await api.getHealthTags())
+  }
+
+  // --- Category & Tag Management ---
+  const handleAddCat = async (e: any) => {
+    e.preventDefault()
+    if (!newCat.name_en || !newCat.name_ta) return
+    await api.addCategory(newCat)
+    setNewCat({ name_en: '', name_ta: '' })
+    loadData()
+  }
+  const handleDeleteCat = async (id: number) => {
+    if (confirm('Delete category?')) {
+      await api.deleteCategory(id)
+      loadData()
     }
   }
 
-  const onDelete = async (id: number) => {
-    try {
+  const handleAddTag = async (e: any) => {
+    e.preventDefault()
+    if (!newTag.name_en || !newTag.name_ta) return
+    await api.addHealthTag(newTag)
+    setNewTag({ name_en: '', name_ta: '' })
+    loadData()
+  }
+  const handleDeleteTag = async (id: number) => {
+    if (confirm('Delete tag?')) {
+      await api.deleteHealthTag(id)
+      loadData()
+    }
+  }
+
+  // --- Product Management ---
+  const handleEditProd = (p: any) => {
+    setEditingProd(p)
+    setProdForm({
+      name: p.name, nameTa: p.nameTa || '', 
+      category: p.category, remedy: p.remedy || [],
+      price: p.price, offerPrice: p.offerPrice || '', stock: p.stock,
+      description: p.description, descriptionTa: p.descriptionTa || '',
+      benefits: p.benefits, benefitsTa: p.benefitsTa || '',
+      image: p.image || ''
+    })
+    setTab('products')
+  }
+
+  const toggleRemedy = (tName: string) => {
+    setProdForm((f: any) => ({
+      ...f, 
+      remedy: f.remedy.includes(tName) 
+        ? f.remedy.filter((r: string) => r !== tName)
+        : [...f.remedy, tName]
+    }))
+  }
+
+  const handleSaveProd = async (e: any) => {
+    e.preventDefault()
+    setLoading(true)
+    const payload = {
+      ...prodForm,
+      offerPrice: prodForm.offerPrice ? Number(prodForm.offerPrice) : undefined
+    }
+    if (editingProd) {
+      await api.updateProduct(editingProd.id, payload)
+    } else {
+      await api.createProduct(payload)
+    }
+    setEditingProd(null)
+    setProdForm({ name: '', nameTa: '', category: '', remedy: [], price: 0, offerPrice: '', stock: 10, description: '', descriptionTa: '', benefits: '', benefitsTa: '', image: '/assets/images/default-herb.jpg' })
+    await fetchProducts()
+    loadData()
+    setLoading(false)
+  }
+
+  const handleDeleteProd = async (id: number) => {
+    if (confirm('Delete product?')) {
       await api.deleteProduct(id)
-      removeProduct(id)
-      const refreshed = await api.getSummary()
-      setSummary(refreshed)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed')
+      fetchProducts()
+      loadData()
     }
   }
 
@@ -81,84 +123,152 @@ export default function Dashboard() {
       <div className="bg-gradient-to-r from-[#eaf2e5] to-bgMain border-b border-sand/50 py-8">
         <div className="max-w-7xl mx-auto px-4">
           <h1 className="text-3xl font-bold font-headline text-textMain flex items-center gap-3">
-            <BarChart2 className="text-sageDark" /> {t('admin.title')}
+            <BarChart2 className="text-sageDark" /> Admin Dashboard
           </h1>
+          <div className="flex gap-4 mt-6">
+            <button onClick={() => setTab('overview')} className={`px-4 py-2 rounded-lg font-bold ${tab === 'overview' ? 'bg-sageDark text-white' : 'bg-white text-textMuted'}`}>Overview</button>
+            <button onClick={() => setTab('categories')} className={`px-4 py-2 rounded-lg font-bold ${tab === 'categories' ? 'bg-sageDark text-white' : 'bg-white text-textMuted'}`}>Categories & Tags</button>
+            <button onClick={() => setTab('products')} className={`px-4 py-2 rounded-lg font-bold ${tab === 'products' ? 'bg-sageDark text-white' : 'bg-white text-textMuted'}`}>Products (CRUD)</button>
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {cards.map((card) => (
-            <div key={card.label} className="bg-white rounded-2xl p-5 border border-sand/50 shadow-soft">
-              <p className="text-sm text-textMuted">{card.label}</p>
-              <p className="text-3xl font-bold text-textMain mt-1">{card.value}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <form onSubmit={onCreate} className="bg-white rounded-2xl p-6 border border-sand/50 shadow-soft space-y-3">
-            <h2 className="font-bold text-textMain flex items-center gap-2">
-              <Plus size={16} /> {t('admin.add_product')}
-            </h2>
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Name" className="w-full h-10 px-3 rounded-xl border border-sand" required />
-            <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category" className="w-full h-10 px-3 rounded-xl border border-sand" required />
-            <input value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} type="number" min={1} placeholder="Price" className="w-full h-10 px-3 rounded-xl border border-sand" required />
-            <input value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} type="number" min={0} placeholder="Stock" className="w-full h-10 px-3 rounded-xl border border-sand" required />
-            <input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="Image URL" className="w-full h-10 px-3 rounded-xl border border-sand" required />
-            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Description" className="w-full px-3 py-2 rounded-xl border border-sand" rows={2} required />
-            <textarea value={form.benefits} onChange={(e) => setForm({ ...form, benefits: e.target.value })} placeholder="Benefits" className="w-full px-3 py-2 rounded-xl border border-sand" rows={2} required />
-            <button disabled={loading} className="w-full h-10 rounded-xl bg-sageDark hover:bg-sageDeep text-white font-bold disabled:opacity-60">
-              {loading ? '...' : t('admin.add_product')}
-            </button>
-            {error && <p className="text-sm text-red-500">{error}</p>}
-          </form>
-
-          <div className="bg-white rounded-2xl p-6 border border-sand/50 shadow-soft">
-            <h2 className="font-bold text-textMain mb-4">Orders</h2>
-            <div className="space-y-2 max-h-96 overflow-auto">
-              {orders.map((order) => (
-                <div key={order.id} className="p-3 rounded-xl bg-bgMain flex items-center justify-between">
-                  <span className="text-sm font-medium text-textMain">Order #{order.id}</span>
-                  <span className="text-sm text-sageDark font-bold">₹{order.totalPrice}</span>
+        {tab === 'overview' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[{ label: 'Total Products', value: summary.totalProducts }, { label: 'Total Orders', value: summary.totalOrders }, { label: 'Total Revenue', value: `₹${summary.totalRevenue}` }].map((c) => (
+                <div key={c.label} className="bg-white rounded-2xl p-5 border border-sand/50">
+                  <p className="text-sm text-textMuted">{c.label}</p>
+                  <p className="text-3xl font-bold text-textMain mt-1">{c.value}</p>
                 </div>
               ))}
-              {!orders.length && <p className="text-sm text-textMuted">No orders yet</p>}
+            </div>
+            <div className="bg-white rounded-2xl p-6 border border-sand/50">
+              <h2 className="font-bold text-textMain mb-4">Recent Orders</h2>
+              <div className="space-y-2 max-h-96 overflow-auto">
+                {orders.map((o) => (
+                  <div key={o.id} className="p-3 rounded-xl bg-bgMain flex items-center justify-between border border-sand/50">
+                    <div>
+                      <span className="text-sm font-bold text-textMain">{o.invoiceNo} - {o.name}</span>
+                      <p className="text-xs text-textMuted">{o.items?.length || 0} items</p>
+                    </div>
+                    <span className="text-sm text-sageDark font-bold">₹{o.total}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {tab === 'categories' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-white p-6 rounded-2xl border border-sand/50">
+              <h2 className="font-bold text-lg mb-4 flex gap-2 items-center"><List size={18}/> Categories</h2>
+              <form onSubmit={handleAddCat} className="flex gap-2 mb-6">
+                <input required placeholder="Name EN" className="flex-1 px-3 py-2 border border-sand rounded-xl text-sm" value={newCat.name_en} onChange={e=>setNewCat({...newCat, name_en: e.target.value})} />
+                <input required placeholder="Name TA" className="flex-1 px-3 py-2 border border-sand rounded-xl text-sm" value={newCat.name_ta} onChange={e=>setNewCat({...newCat, name_ta: e.target.value})} />
+                <button className="bg-sageDark text-white px-4 py-2 rounded-xl text-sm font-bold">Add</button>
+              </form>
+              <div className="space-y-2 max-h-[400px] overflow-auto">
+                {cats.map(c => (
+                  <div key={c.id} className="flex justify-between items-center p-3 border border-sand rounded-xl text-sm">
+                    <span><b>{c.name_en}</b> ({c.name_ta})</span>
+                    <button onClick={() => handleDeleteCat(c.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={15}/></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-sand/50">
+              <h2 className="font-bold text-lg mb-4 flex gap-2 items-center"><Tag size={18}/> Health Tags</h2>
+              <form onSubmit={handleAddTag} className="flex gap-2 mb-6">
+                <input required placeholder="Name EN" className="flex-1 px-3 py-2 border border-sand rounded-xl text-sm" value={newTag.name_en} onChange={e=>setNewTag({...newTag, name_en: e.target.value})} />
+                <input required placeholder="Name TA" className="flex-1 px-3 py-2 border border-sand rounded-xl text-sm" value={newTag.name_ta} onChange={e=>setNewTag({...newTag, name_ta: e.target.value})} />
+                <button className="bg-sageDark text-white px-4 py-2 rounded-xl text-sm font-bold">Add</button>
+              </form>
+              <div className="space-y-2 max-h-[400px] overflow-auto">
+                {tags.map(c => (
+                  <div key={c.id} className="flex justify-between items-center p-3 border border-sand rounded-xl text-sm">
+                    <span><b>{c.name_en}</b> ({c.name_ta})</span>
+                    <button onClick={() => handleDeleteTag(c.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={15}/></button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        <div className="bg-white rounded-2xl border border-sand/50 shadow-soft overflow-hidden">
-          <div className="px-6 py-4 border-b border-sand/40">
-            <h2 className="font-bold text-textMain">Products</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-bgMain text-textMuted">
-                <tr>
-                  <th className="px-4 py-3 text-left">Name</th>
-                  <th className="px-4 py-3 text-right">Price</th>
-                  <th className="px-4 py-3 text-right">Stock</th>
-                  <th className="px-4 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product: Product) => (
-                  <tr key={product.id} className="border-t border-sand/20">
-                    <td className="px-4 py-3">{product.name}</td>
-                    <td className="px-4 py-3 text-right">₹{product.price}</td>
-                    <td className="px-4 py-3 text-right">{product.stock}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => onDelete(product.id)} className="inline-flex items-center gap-1 text-red-500 hover:text-red-600 font-semibold">
-                        <Trash2 size={14} /> {t('admin.delete')}
-                      </button>
-                    </td>
-                  </tr>
+        {tab === 'products' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <form onSubmit={handleSaveProd} className="bg-white p-6 rounded-2xl border border-sand/50 space-y-4 shadow-soft sticky top-[110px]">
+              <div className="flex justify-between items-center">
+                <h2 className="font-bold text-lg">{editingProd ? 'Edit Product' : 'Add New Product'}</h2>
+                {editingProd && <button type="button" onClick={() => {setEditingProd(null); setProdForm({name:'', nameTa:'', category:'', remedy:[], price:0, offerPrice:'', stock:10, description:'', descriptionTa:'', benefits:'', benefitsTa:'', image:'/assets/images/default-herb.jpg'})}} className="text-sm text-blue-500 flex items-center gap-1"><Plus size={14}/> New</button>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <input required placeholder="Name (EN)" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" value={prodForm.name} onChange={e=>setProdForm({...prodForm, name: e.target.value})} />
+                <input required placeholder="Name (TA)" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" value={prodForm.nameTa} onChange={e=>setProdForm({...prodForm, nameTa: e.target.value})} />
+              </div>
+
+              <select required className="w-full px-3 py-2 border border-sand rounded-xl text-sm bg-white" value={prodForm.category} onChange={e=>setProdForm({...prodForm, category: e.target.value})}>
+                <option value="" disabled>Select Category</option>
+                {cats.map(c => <option key={c.id} value={c.name_en}>{c.name_en} ({c.name_ta})</option>)}
+              </select>
+
+              <div>
+                <p className="text-xs font-bold text-textMuted mb-2">Health Tags</p>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map(t => (
+                    <label key={t.id} className="flex items-center gap-1 text-xs bg-bgMain px-2 py-1 rounded cursor-pointer border border-sand">
+                      <input type="checkbox" checked={prodForm.remedy.includes(t.name_en)} onChange={() => toggleRemedy(t.name_en)} className="accent-sageDark" />
+                      {t.name_en}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <input required placeholder="MRP (₹)" type="number" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" value={prodForm.price || ''} onChange={e=>setProdForm({...prodForm, price: Number(e.target.value)})} />
+                <input placeholder="Offer (₹) opt" type="number" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" value={prodForm.offerPrice} onChange={e=>setProdForm({...prodForm, offerPrice: e.target.value})} />
+                <input required placeholder="Stock" type="number" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" value={prodForm.stock || 0} onChange={e=>setProdForm({...prodForm, stock: Number(e.target.value)})} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <textarea placeholder="Desc (EN)" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" rows={2} value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})} />
+                <textarea placeholder="Desc (TA)" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" rows={2} value={prodForm.descriptionTa} onChange={e=>setProdForm({...prodForm, descriptionTa: e.target.value})} />
+                <textarea placeholder="Benefits (EN)" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" rows={2} value={prodForm.benefits} onChange={e=>setProdForm({...prodForm, benefits: e.target.value})} />
+                <textarea placeholder="Benefits (TA)" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" rows={2} value={prodForm.benefitsTa} onChange={e=>setProdForm({...prodForm, benefitsTa: e.target.value})} />
+              </div>
+
+              <input placeholder="Image URL (Base64 or Link)" className="w-full px-3 py-2 border border-sand rounded-xl text-sm" value={prodForm.image} onChange={e=>setProdForm({...prodForm, image: e.target.value})} />
+
+              <button disabled={loading} className="w-full py-3 bg-sageDark hover:bg-sageDeep text-white font-bold rounded-xl">{loading ? 'Saving...' : editingProd ? 'Update Product' : 'Create Product'}</button>
+            </form>
+
+            <div className="bg-white p-6 rounded-2xl border border-sand/50 shadow-soft">
+              <h2 className="font-bold text-lg mb-4">All Products ({products.length})</h2>
+              <div className="space-y-3 max-h-[80vh] overflow-y-auto pr-2">
+                {products.map(p => (
+                  <div key={p.id} className="flex gap-4 p-3 border border-sand/50 rounded-xl bg-bgMain items-center justify-between">
+                    <div className="flex gap-3 items-center">
+                      <img src={p.image} className="w-12 h-12 rounded object-cover" />
+                      <div>
+                        <p className="font-bold text-sm">{p.name}</p>
+                        <p className="text-xs text-textMuted">{p.category} | ₹{p.offerPrice || p.price}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEditProd(p)} className="p-2 text-blue-500 bg-blue-50 rounded-lg hover:bg-blue-100"><Edit2 size={16}/></button>
+                      <button onClick={() => handleDeleteProd(p.id)} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 size={16}/></button>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

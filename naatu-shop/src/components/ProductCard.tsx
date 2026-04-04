@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { Heart, ShoppingCart, Star } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useCartStore, useFavStore, type Product } from '../store/store'
 import { useLangStore } from '../store/langStore'
 
@@ -49,13 +50,13 @@ export default function ProductCard({ product }: { product: Product }) {
         <Heart size={15} style={{ fill: fav ? '#F43F5E' : 'none', stroke: fav ? '#F43F5E' : '#9CA3AF' }} />
       </motion.button>
 
-      <div className="w-full overflow-hidden" style={{ aspectRatio: '1', background: '#fff' }}>
+      <Link to={`/product/${product.id}`} className="w-full overflow-hidden block" style={{ aspectRatio: '1', background: '#fff' }}>
         <img src={product.image} alt={product.name} loading="lazy"
           onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=400&q=80' }}
           className="w-full h-full object-cover transition-transform duration-500" style={{ transform: 'scale(1)' }}
           onMouseEnter={e => ((e.target as HTMLImageElement).style.transform = 'scale(1.08)')}
           onMouseLeave={e => ((e.target as HTMLImageElement).style.transform = 'scale(1)')} />
-      </div>
+      </Link>
 
       <div className="flex flex-col flex-grow gap-1.5" style={{ padding: '14px 16px' }}>
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: C.sageDark }}>
@@ -74,7 +75,21 @@ export default function ProductCard({ product }: { product: Product }) {
         </div>
 
         <div className="flex items-center justify-between mt-auto" style={{ paddingTop: 12, borderTop: `1px solid rgba(234,215,183,0.7)` }}>
-          <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 18, color: C.textMain }}>₹{product.price}</span>
+          <div className="flex flex-col">
+            {product.offerPrice ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span style={{ color: '#9CA3AF', textDecoration: 'line-through', fontSize: 12 }}>₹{product.price}</span>
+                  <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>
+                    {Math.round(((product.price - product.offerPrice) / product.price) * 100)}% OFF
+                  </span>
+                </div>
+                <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 18, color: '#16A34A' }}>₹{product.offerPrice}</span>
+              </>
+            ) : (
+              <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 18, color: C.textMain }}>₹{product.price}</span>
+            )}
+          </div>
           <motion.button
             whileTap={{ scale: 0.88 }} onClick={() => product.stock > 0 && add(product)} disabled={product.stock === 0}
             className="flex items-center gap-1.5 font-bold rounded-xl transition-colors"

@@ -1,104 +1,162 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { api } from '../services/api'
+import { Leaf, Eye, EyeOff, CheckCircle } from 'lucide-react'
+import { authService } from '../services/authService'
 import { useAuthStore } from '../store/store'
-import { useLangStore } from '../store/langStore'
+import { isSupabaseConfigured } from '../lib/supabase'
 
 export default function Register() {
-  const navigate = useNavigate()
-  const { t } = useLangStore()
-  const setAuth = useAuthStore((state) => state.setAuth)
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [form, setForm] = useState({ name: '', mobile: '', email: '', password: '', confirm: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPwd, setShowPwd] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+  const navigate = useNavigate()
+  const setAuth = useAuthStore(s => s.setAuth)
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault()
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setError('')
+
+    if (form.mobile && form.mobile.length !== 10) {
+      setError('Mobile number must be 10 digits')
+      return
+    }
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+    if (form.password !== form.confirm) {
+      setError('Passwords do not match')
+      return
+    }
+
     setLoading(true)
-    try {
-      const response = await api.register({ name, email, password })
-      setAuth(response.token, response.user)
-      navigate('/products')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed')
-      // Auto-fallback to demo mode if backend is unreachable or any error occurs
-      // This ensures seamless client presentation even without a live backend
-      setAuth('demo-token', { id: 1, name: name || 'Demo Client', email: email || 'demo@srisiddha.com', role: 'admin' })
-      navigate('/products')
-    } finally {
-      setLoading(false)
+
+    const { user, error: authError } = await authService.signUp({
+      email: form.email.trim(),
+      password: form.password,
+      name: form.name.trim(),
+      mobile: form.mobile.trim(),
+    })
+
+    setLoading(false)
+
+    if (authError || !user) {
+      setError(authError || 'Signup failed, please try again')
+      return
+    }
+
+    if (isSupabaseConfigured) {
+      // Email verification sent — show confirmation
+      setEmailSent(true)
+    } else {
+      setAuth(user)
+      navigate('/')
     }
   }
 
+  if (emailSent) {
+    return (
+      <div className="bg-gradient-to-br from-[#eaf2e5] to-[#f7f6f2] min-h-screen flex items-center justify-center p-4">
+        <div className="bg-white p-10 rounded-3xl shadow-xl border border-sand/40 w-full max-w-md text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
+            <CheckCircle size={36} className="text-green-500" />
+          </div>
+          <h2 className="text-2xl font-bold font-headline text-textMain mb-3">Check Your Email!</h2>
+          <p className="text-textMuted mb-2">
+            We've sent a confirmation link to <strong>{form.email}</strong>
+          </p>
+          <p className="text-sm text-textMuted mb-8">
+            Click the link in the email to activate your account, then come back to sign in.
+          </p>
+          <Link to="/login"
+            className="inline-block bg-sageDark hover:bg-sageDeep text-white font-bold py-3 px-8 rounded-xl transition-colors">
+            Go to Login
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="bg-bgMain min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl p-6 border border-sand/50 shadow-soft">
-        <h1 className="text-2xl font-bold text-textMain mb-5">{t('auth.register')}</h1>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="text-sm font-semibold text-textMain">{t('auth.name')}</label>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              type="text"
-              className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-sand focus:border-sage outline-none"
-              required
-            />
+    <div className="bg-gradient-to-br from-[#eaf2e5] to-[#f7f6f2] min-h-screen flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-3xl shadow-xl border border-sand/40 w-full max-w-md">
+        {/* Header */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-14 h-14 bg-sage/30 rounded-2xl flex items-center justify-center mb-3">
+            <Leaf size={28} className="text-sageDark" />
           </div>
-          <div>
-            <label className="text-sm font-semibold text-textMain">{t('auth.email')}</label>
-            <input
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              type="email"
-              className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-sand focus:border-sage outline-none"
-              required
-            />
+          <h1 className="text-2xl font-bold font-headline text-textMain">Create Account</h1>
+          <p className="text-sm text-textMuted mt-1">Join Sri Siddha Herbal Store</p>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm mb-4">
+            {error}
           </div>
-          <div>
-            <label className="text-sm font-semibold text-textMain">{t('auth.password')}</label>
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              type="password"
-              className="w-full mt-1 h-11 px-3 rounded-xl border-2 border-sand focus:border-sage outline-none"
-              required
-            />
+        )}
+
+        {isSupabaseConfigured && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-xl text-sm mb-5">
+            📧 A verification email will be sent to confirm your account.
           </div>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-11 rounded-xl bg-sageDark text-white font-bold hover:bg-sageDeep transition-colors disabled:opacity-60"
-          >
-            {loading ? '...' : t('auth.submit_register')}
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold text-textMain mb-1.5">Full Name *</label>
+            <input required placeholder="Your full name"
+              className="w-full px-4 py-3 rounded-xl border-2 border-sand focus:border-sageDark outline-none transition-colors"
+              value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-textMain mb-1.5">Mobile Number</label>
+            <input type="tel" maxLength={10} placeholder="10-digit mobile (optional)"
+              className="w-full px-4 py-3 rounded-xl border-2 border-sand focus:border-sageDark outline-none transition-colors"
+              value={form.mobile} onChange={e => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '') })} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-textMain mb-1.5">Email Address *</label>
+            <input type="email" required placeholder="you@example.com" autoComplete="email"
+              className="w-full px-4 py-3 rounded-xl border-2 border-sand focus:border-sageDark outline-none transition-colors"
+              value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-textMain mb-1.5">Password *</label>
+            <div className="relative">
+              <input type={showPwd ? 'text' : 'password'} required placeholder="Min 6 characters" autoComplete="new-password"
+                className="w-full px-4 py-3 rounded-xl border-2 border-sand focus:border-sageDark outline-none transition-colors pr-12"
+                value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+              <button type="button" onClick={() => setShowPwd(!showPwd)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-textMain">
+                {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-textMain mb-1.5">Confirm Password *</label>
+            <input type="password" required placeholder="Re-enter password" autoComplete="new-password"
+              className="w-full px-4 py-3 rounded-xl border-2 border-sand focus:border-sageDark outline-none transition-colors"
+              value={form.confirm} onChange={e => setForm({ ...form, confirm: e.target.value })} />
+          </div>
+
+          <button type="submit" disabled={loading}
+            className="w-full bg-sageDark hover:bg-sageDeep text-white font-bold py-3.5 rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed mt-2 flex items-center justify-center gap-2">
+            {loading ? (
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Creating Account...</>
+            ) : 'Create Account'}
           </button>
         </form>
-        <Link to="/login" className="block mt-4 text-sm text-sageDark font-semibold hover:underline">
-          {t('auth.have_account')}
-        </Link>
-        <div className="relative my-4">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-sand"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-textMuted">OR</span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setAuth('demo-token', { id: 1, name: 'Demo Client', email: 'demo@srisiddha.com', role: 'admin' })
-            navigate('/products')
-          }}
-          className="w-full h-11 rounded-xl bg-gradient-to-r from-orange-400 to-amber-500 text-white font-bold hover:from-orange-500 hover:to-amber-600 transition-colors shadow-md"
-        >
-          Fake Login (Client Demo)
-        </button>
+
+        <p className="text-center mt-6 text-sm text-textMuted">
+          Already have an account?{' '}
+          <Link to="/login" className="text-sageDark font-bold hover:underline">Sign In</Link>
+        </p>
       </div>
     </div>
   )

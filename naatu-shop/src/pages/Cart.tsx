@@ -1,33 +1,15 @@
 import { motion } from 'framer-motion'
-import { Trash2, Plus, Minus, MessageCircle, Printer, ShoppingBag, ArrowLeft } from 'lucide-react'
-import { useCartStore, useAuthStore } from '../store/store'
+import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft } from 'lucide-react'
 import { useLangStore } from '../store/langStore'
+import { useCartStore } from '../store/store'
 import { Link } from 'react-router-dom'
-import { api } from '../services/api'
-
-const PHONE = '919876543210'
 
 export default function Cart() {
   const { items, remove, updateQty, total, count, clear } = useCartStore()
-  const user = useAuthStore((state) => state.user)
   const { t, lang } = useLangStore()
   const sub = total()
   const shipping = sub === 0 ? 0 : sub >= 500 ? 0 : 50
   const grand = sub + shipping
-
-  const waText = encodeURIComponent(
-    `🌿 *Sri Siddha Herbal Store* — My Order\n\n` +
-    items.map(i => {
-      const dbName = lang === 'ta' && i.nameTa ? i.nameTa : i.name;
-      return `• ${dbName} (${i.unit}) ×${i.qty} = ₹${i.price * i.qty}`
-    }).join('\n') +
-    `\n\nSubtotal: ₹${sub}\nShipping: ${shipping === 0 && sub > 0 ? 'FREE 🎉' : `₹${shipping}`}\n*Grand Total: ₹${grand}*\n\nPlease confirm my order. Thank you! 🙏`
-  )
-
-  const placeOrder = async () => {
-    if (!user || !items.length) return
-    await api.createOrder(items.map((item) => ({ productId: item.id, quantity: item.qty })))
-  }
 
   return (
     <div className="bg-bgMain min-h-screen">
@@ -135,22 +117,12 @@ export default function Cart() {
             </div>
 
             <div className="flex flex-col gap-3">
-              <a href={items.length ? `https://wa.me/${PHONE}?text=${waText}` : '#'}
-                target={items.length ? '_blank' : '_self'} rel="noreferrer"
-                onClick={() => {
-                  if (user) {
-                    placeOrder().catch(() => undefined)
-                  }
-                }}
+              <Link to="/checkout"
                 className={`flex items-center justify-center gap-2 font-bold py-3.5 rounded-xl transition-colors text-sm ${
-                  items.length ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer' : 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
+                  items.length ? 'bg-sageDark hover:bg-sageDeep text-white cursor-pointer' : 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
                 }`}>
-                <MessageCircle size={16} /> {t('cart.send_wa')}
-              </a>
-              <button onClick={() => window.print()} disabled={!items.length}
-                className="flex items-center justify-center gap-2 font-bold py-3.5 rounded-xl border-2 border-sand hover:border-sageDark text-textMain transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed">
-                <Printer size={16} /> {t('cart.print')}
-              </button>
+                Proceed to Checkout
+              </Link>
             </div>
 
             {sub > 0 && sub < 500 && (

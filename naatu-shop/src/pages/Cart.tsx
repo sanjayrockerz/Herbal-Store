@@ -1,11 +1,13 @@
 import { motion } from 'framer-motion'
 import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft } from 'lucide-react'
+import { useCartStore, useAuthStore } from '../store/store'
 import { useLangStore } from '../store/langStore'
-import { useCartStore } from '../store/store'
 import { Link } from 'react-router-dom'
+import { BRAND_EN, BRAND_TA, BRAND_SUBTITLE } from '../lib/brand'
 
 export default function Cart() {
   const { items, remove, updateQty, total, count, clear } = useCartStore()
+  const { user } = useAuthStore()
   const { t, lang } = useLangStore()
   const sub = total()
   const shipping = sub === 0 ? 0 : sub >= 500 ? 0 : 50
@@ -82,11 +84,11 @@ export default function Cart() {
             <h2 className="font-bold text-xl font-headline text-textMain mb-5 pb-4 border-b border-sand/40">{t('cart.bill_summary')}</h2>
 
             {/* Invoice printable area */}
-            <div id="invoice-area" className="bg-bgMain rounded-xl p-4 mb-5 text-sm">
+            <div id="invoice-area" className="print-receipt bg-bgMain rounded-xl p-4 mb-5 text-sm">
               <div className="text-center mb-3 pb-3 border-b border-dashed border-sand">
-                <p className="font-extrabold text-base font-headline text-textMain">🌿 Sri Siddha Herbal Store</p>
-                <p className="text-xs text-textMuted">123 Herbal Valley, Tamil Nadu 600001</p>
-                <p className="text-xs text-textMuted">+91 98765 43210 | srisiddha.in</p>
+                <p className="font-extrabold text-base font-headline text-textMain">{BRAND_EN}</p>
+                <p className="text-[11px] font-semibold text-textMuted">{BRAND_TA}</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-sageDark font-bold">{BRAND_SUBTITLE}</p>
               </div>
               {items.length === 0 ? (
                 <p className="text-center text-gray-400 text-xs py-3">{t('cart.empty')}</p>
@@ -121,7 +123,7 @@ export default function Cart() {
                 className={`flex items-center justify-center gap-2 font-bold py-3.5 rounded-xl transition-colors text-sm ${
                   items.length ? 'bg-sageDark hover:bg-sageDeep text-white cursor-pointer' : 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
                 }`}>
-                Proceed to Checkout
+                {user ? t('cart.checkout') : t('nav.login')}
               </Link>
             </div>
 

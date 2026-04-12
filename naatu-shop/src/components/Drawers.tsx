@@ -3,6 +3,7 @@ import { X, Trash2, Plus, Minus, ShoppingBag, MessageCircle } from 'lucide-react
 import { useCartStore, useFavStore } from '../store/store'
 import { useLangStore } from '../store/langStore'
 import { Link } from 'react-router-dom'
+import { BRAND_EN } from '../lib/brand'
 
 export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { items, remove, updateQty, total, count, clear } = useCartStore()
@@ -10,9 +11,9 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
   const sub = total()
   const shipping = sub >= 500 ? 0 : (sub === 0 ? 0 : 50)
   const grand = sub + shipping
-  const PHONE = '919876543210'
+  const PHONE = '918610632662'
   const waText = encodeURIComponent(
-    `🌿 *Sri Siddha Herbal Store* — Cart Order\n\n` +
+    `🌿 *${BRAND_EN}* — Cart Order\n\n` +
     items.map(i => {
       const dbName = lang === 'ta' && i.nameTa ? i.nameTa : i.name;
       return `• ${dbName} ×${i.qty} — ₹${i.price * i.qty}`

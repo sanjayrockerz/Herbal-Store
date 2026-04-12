@@ -5,13 +5,23 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useCartStore, useFavStore, useAuthStore } from '../store/store'
 import { useLangStore } from '../store/langStore'
 import { CartDrawer, FavoritesDrawer } from './Drawers'
+import { BRAND_EN, BRAND_SUBTITLE } from '../lib/brand'
 
 export default function Navbar() {
   const [query, setQuery] = useState('')
+  const [showCart, setShowCart] = useState(false)
+  const [showFav, setShowFav] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const count = useCartStore(s => s.count())
   const favCount = useFavStore(s => s.items.length)
   const user = useAuthStore((s) => s.user)
+  const isAdmin = useAuthStore((s) => s.isAdmin())
+  const logout = useAuthStore((s) => s.logout)
+    const handleLogout = async () => {
+      await logout()
+      navigate('/login')
+    }
+
   const { t, lang, setLang } = useLangStore()
   const navigate = useNavigate()
 
@@ -22,8 +32,8 @@ export default function Navbar() {
 
   return (
     <>
-      <div className="bg-forestDark text-sage text-xs py-2 text-center font-medium tracking-wide flex items-center justify-center gap-4">
-        <span>🌿 {t('nav.free_shipping')} &nbsp;·&nbsp; WhatsApp: 98765 43210</span>
+      <div className="flex items-center justify-center gap-3 overflow-x-auto bg-forestDark px-3 py-2 text-center text-xs font-medium tracking-wide text-sage">
+        <span className="whitespace-nowrap">🌿 {t('nav.free_shipping')} &nbsp;·&nbsp; WhatsApp: 86106 32662</span>
         <button onClick={() => setLang(lang === 'en' ? 'ta' : 'en')} className="bg-sageDark/20 hover:bg-sageDark/40 px-2 flex items-center gap-1 py-0.5 rounded text-white font-bold transition-colors">
           <span className={lang === 'en' ? 'opacity-100' : 'opacity-40'}>EN</span>
           <span>|</span>
@@ -32,18 +42,18 @@ export default function Navbar() {
       </div>
 
       <header className="sticky top-0 z-40 glass border-b border-sand/50 shadow-sm">
-        <nav className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-2 shrink-0 group">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 lg:gap-4">
+          <Link to="/" className="group flex shrink-0 items-center gap-2 min-w-0">
             <div className="w-9 h-9 bg-sage rounded-xl flex items-center justify-center group-hover:bg-sageDark transition-colors">
               <Leaf size={18} className="text-white" />
             </div>
-            <div className="leading-none flex flex-col items-center">
-              <p className="text-[15px] font-bold text-textMain tracking-tight font-headline">Sri Siddha</p>
-              <p className="text-[9px] text-sageDark uppercase font-bold tracking-[0.15em]">Herbal Store</p>
+            <div className="flex min-w-0 flex-col leading-none">
+              <p className="truncate text-[13px] font-bold leading-tight tracking-tight text-textMain md:text-[15px] font-headline">{BRAND_EN}</p>
+              <p className="hidden text-[9px] font-bold uppercase tracking-[0.15em] text-sageDark md:block">{BRAND_SUBTITLE}</p>
             </div>
           </Link>
 
-          <form onSubmit={handleSearch} className="hidden md:flex flex-grow max-w-xl">
+          <form onSubmit={handleSearch} className="hidden flex-grow max-w-xl md:flex min-w-0">
             <div className="relative w-full flex">
               <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
               <input value={query} onChange={e => setQuery(e.target.value)} type="text"
@@ -53,25 +63,32 @@ export default function Navbar() {
             </div>
           </form>
 
-          <div className="hidden lg:flex items-center gap-6 text-sm font-semibold text-textMuted">
+          <div className="hidden xl:flex items-center gap-5 text-sm font-semibold text-textMuted">
             <Link to="/" className="hover:text-textMain transition-colors">{t('nav.home')}</Link>
             <Link to="/products" className="hover:text-textMain transition-colors">{t('nav.products')}</Link>
             <Link to="/cart" className="hover:text-textMain transition-colors">{t('nav.cart')}</Link>
             <Link to="/favorites" className="hover:text-textMain transition-colors">{t('nav.favorites')}</Link>
-            {user?.role === 'admin' && <Link to="/admin" className="hover:text-textMain transition-colors">{t('nav.dashboard')}</Link>}
+            {user && <Link to="/profile" className="hover:text-textMain transition-colors">Profile</Link>}
+            {isAdmin && <Link to="/dashboard" className="hover:text-textMain transition-colors">Dashboard</Link>}
+            {isAdmin && <Link to="/pos" className="hover:text-textMain transition-colors">POS</Link>}
             {user ? (
-              <Link to="/profile" className="hover:text-textMain transition-colors flex items-center gap-1.5"><Heart size={14} className="hidden" /> Profile</Link>
+              <button
+                onClick={handleLogout}
+                className="hover:text-textMain transition-colors"
+              >
+                {t('nav.logout')}
+              </button>
             ) : (
               <Link to="/login" className="hover:text-textMain transition-colors">{t('nav.login')}</Link>
             )}
           </div>
 
           <div className="flex items-center gap-1">
-            <motion.button whileTap={{ scale: 0.88 }} onClick={() => useFavStore.getState().setOpen(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => setShowFav(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
               <Heart size={20} className="text-textMuted" />
               {favCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{favCount}</span>}
             </motion.button>
-            <motion.button whileTap={{ scale: 0.88 }} onClick={() => useCartStore.getState().setOpen(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => setShowCart(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
               <ShoppingCart size={20} className="text-textMuted" />
               {count > 0 && <span className="absolute -top-0.5 -right-0.5 bg-sageDark text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{count}</span>}
             </motion.button>
@@ -92,9 +109,13 @@ export default function Navbar() {
               </form>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  [t('nav.home'), '/'], [t('nav.products'), '/products'],
-                  [t('nav.cart'), '/cart'], [t('nav.favorites'), '/favorites'],
-                  [user?.role === 'admin' ? t('nav.dashboard') : t('nav.login'), user?.role === 'admin' ? '/admin' : '/login']
+                  [t('nav.home'), '/'],
+                  [t('nav.products'), '/products'],
+                  [t('nav.cart'), '/cart'],
+                  [t('nav.favorites'), '/favorites'],
+                  ...(user ? [['Profile', '/profile']] : []),
+                  ...(isAdmin ? [['Dashboard', '/dashboard'], ['POS', '/pos']] : []),
+                  ...(!user ? [[t('nav.login'), '/login']] : [])
                 ].map(([label, href]) => (
                   <Link key={href} to={href} onClick={() => setMobileOpen(false)}
                     className="py-2.5 px-3 bg-bgMain rounded-lg text-sm font-semibold text-textMuted hover:text-textMain text-center transition-colors">
@@ -102,13 +123,24 @@ export default function Navbar() {
                   </Link>
                 ))}
               </div>
+              {user && (
+                <button
+                  onClick={async () => {
+                    setMobileOpen(false)
+                    await handleLogout()
+                  }}
+                  className="w-full py-2.5 px-3 bg-white border border-sand rounded-lg text-sm font-semibold text-red-500"
+                >
+                  {t('nav.logout')}
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </header>
 
-      <CartDrawer open={useCartStore(s => s.isOpen)} onClose={() => useCartStore.getState().setOpen(false)} />
-      <FavoritesDrawer open={useFavStore(s => s.isOpen)} onClose={() => useFavStore.getState().setOpen(false)} />
+      <CartDrawer open={showCart} onClose={() => setShowCart(false)} />
+      <FavoritesDrawer open={showFav} onClose={() => setShowFav(false)} />
     </>
   )
 }

@@ -35,7 +35,7 @@ const C = {
 
 export default function Home() {
   const { t, lang } = useLangStore()
-  const { products, fetchProducts } = useProductStore()
+  const { products, fetchProducts, error } = useProductStore()
   const topSelling = products.filter(p => p.rating >= 4.7).slice(0, 4)
   const featured = products.slice(8, 16)
 
@@ -71,6 +71,11 @@ export default function Home() {
                 {t('hero.badge')}
               </span>
             </motion.div>
+
+            <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+              style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: '3.5rem', lineHeight: 1.1, color: C.textMain, margin: '0 0 12px 0' }}>
+              {t('hero.title1')} <span style={{ color: C.sageDark }}>{t('hero.title2')}</span>
+            </motion.h1>
 
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} style={{ color: C.textMuted, fontSize: 17, lineHeight: 1.7, maxWidth: 480, margin: 0 }}>
               {t('hero.subtitle')}
@@ -146,6 +151,11 @@ export default function Home() {
 
       {/* ═══ TRUST BADGES ═══════════════════════════════════════════════════ */}
       <section className="max-w-7xl mx-auto px-4 py-8">
+        {error && products.length === 0 && (
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Live products table is empty. Admin should add products in Supabase so the homepage catalog can render.
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { icon: <ShieldCheck size={20} color={C.sageDark} />, t: t('trust.organic'), s: t('trust.organic_sub') },
@@ -198,7 +208,7 @@ export default function Home() {
             {t('cat.view_all')} <ArrowRight size={15} />
           </Link>
         </motion.div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
           {topSelling.map((p, i) => (
             <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.09 }}>
               <ProductCard product={p} />

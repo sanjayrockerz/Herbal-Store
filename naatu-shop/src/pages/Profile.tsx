@@ -1,40 +1,148 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../store/store'
-import { api, type ApiOrder } from '../services/api'
 import { useLangStore } from '../store/langStore'
 import { Package, User, LogOut, ChevronDown, ChevronUp, ShoppingBag, Settings } from 'lucide-react'
-import { isSupabaseConfigured } from '../lib/supabase'
+import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { getLocalOrdersForUser } from '../lib/ordersFallback'
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: '#FEF3C7', text: '#92400E', label: 'Pending' },
-  processing: { bg: '#DBEAFE', text: '#1E40AF', label: 'Processing' },
-  completed: { bg: '#D1FAE5', text: '#065F46', label: 'Completed' },
-  cancelled: { bg: '#FEE2E2', text: '#991B1B', label: 'Cancelled' },
+interface ProfileOrderItem {
+  id?: number | string
+  qty: number
+  price: number
+  offerPrice: number | null
+  name: string
+  nameTa?: string | null
+  image?: string | null
 }
+
+interface ProfileOrder {
+  id: string
+  invoice_no: string
+  customer_name: string
+  phone: string
+  address: string
+  subtotal: number
+  shipping: number
+  total: number
+  status: string
+  created_at: string
+  items: ProfileOrderItem[]
+}
+
+
 
 export default function Profile() {
   const { user, logout } = useAuthStore()
-  const { lang } = useLangStore()
+  const { lang, t } = useLangStore()
   const navigate = useNavigate()
-  const [orders, setOrders] = useState<ApiOrder[]>([])
+  const [orders, setOrders] = useState<ProfileOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'orders' | 'info'>('orders')
+
+  const parseOrderItems = (value: unknown): ProfileOrderItem[] => {
+    if (!Array.isArray(value)) return []
+
+    return value.map((item: any) => ({
+      id: item.id,
+      qty: Number(item.qty || item.quantity || 0),
+      price: Number(item.price || 0),
+      offerPrice: item.offerPrice == null ? null : Number(item.offerPrice),
+      name: String(item.name || 'Product'),
+      nameTa: item.nameTa || null,
+      image: item.image || null,
+    }))
+  }
 
   useEffect(() => {
     if (!user) { navigate('/login'); return }
     if (user.role === 'admin') { setLoading(false); return }
 
-    api.getMyOrders(user.id).then(data => {
-      setOrders(data)
+    if (!isSupabaseConfigured) {
+      const localOrders = getLocalOrdersForUser({ userId: user.id, phone: user.mobile })
+      setOrders(localOrders.map((order) => ({
+        ...order,
+        subtotal: Number(order.subtotal),
+        shipping: Number(order.shipping),
+        total: Number(order.total),
+        items: parseOrderItems(order.items),
+      })))
       setLoading(false)
-    }).catch(() => setLoading(false))
+      return
+    }
+
+    const loadOrders = async () => {
+      try {
+        const { data: authData } = await supabase.auth.getUser()
+        if (!authData.user) {
+          navigate('/login')
+          return
+        }
+
+        const phoneDigits = (user.mobile || '').replace(/\D/g, '')
+
+        const baseQuery = supabase
+          .from('orders')
+          .select('id, invoice_no, customer_name, phone, address, items, subtotal, shipping, total, status, created_at')
+          .order('created_at', { ascending: false })
+
+        let ordersData: any[] | null = null
+        let ordersError: any = null
+
+        const linkedOrdersResult = await baseQuery.eq('user_id', authData.user.id)
+        ordersData = linkedOrdersResult.data
+        ordersError = linkedOrdersResult.error
+
+        if ((!ordersData || ordersData.length === 0) && phoneDigits) {
+          const phoneOrdersResult = await baseQuery.eq('phone', phoneDigits)
+          ordersData = phoneOrdersResult.data
+          ordersError = phoneOrdersResult.error
+        }
+
+        if (ordersError) {
+          throw ordersError
+        }
+
+        if (!ordersData || ordersData.length === 0) {
+          setOrders([])
+          return
+        }
+
+        const mappedOrders: ProfileOrder[] = ordersData.map((order) => ({
+          ...order,
+          subtotal: Number(order.subtotal),
+          shipping: Number(order.shipping),
+          total: Number(order.total),
+          items: parseOrderItems(order.items),
+        }))
+
+        setOrders(mappedOrders)
+      } catch {
+        setOrders([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void loadOrders()
+
+    const channel = supabase
+      .channel(`profile-orders-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        void loadOrders()
+      })
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
   }, [user, navigate])
 
   if (!user) return null
 
   const handleLogout = async () => {
+    await supabase.auth.signOut()
     await logout()
     navigate('/')
   }
@@ -42,7 +150,7 @@ export default function Profile() {
   return (
     <div className="bg-bgMain min-h-screen py-10">
       <div className="max-w-5xl mx-auto px-4">
-        <h1 className="text-3xl font-bold font-headline text-textMain mb-8">My Account</h1>
+        <h1 className="text-3xl font-bold font-headline text-textMain mb-8">{t('profile.title')}</h1>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Sidebar */}
@@ -57,7 +165,7 @@ export default function Profile() {
                 <p className="text-sm text-textMuted">{user.email}</p>
                 {user.mobile && <p className="text-sm text-textMuted">{user.mobile}</p>}
                 <span className={`mt-2 px-3 py-0.5 rounded-full text-xs font-bold ${user.role === 'admin' ? 'bg-sageDark/20 text-sageDark' : 'bg-blue-100 text-blue-700'}`}>
-                  {user.role === 'admin' ? '⚡ Admin' : '🛒 Customer'}
+                  {user.role === 'admin' ? `⚡ ${t('admin.admin_role')}` : `🛒 ${t('admin.cust_role')}`}
                 </span>
               </div>
 
@@ -65,21 +173,19 @@ export default function Profile() {
               <div className="space-y-2">
                 <button onClick={() => setActiveTab('orders')}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-colors ${activeTab === 'orders' ? 'bg-sageDark/10 text-sageDark' : 'text-textMuted hover:bg-bgMain'}`}>
-                  <Package size={16} /> Order History
+                  <Package size={16} /> {t('profile.orders')}
                 </button>
                 <button onClick={() => setActiveTab('info')}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-colors ${activeTab === 'info' ? 'bg-sageDark/10 text-sageDark' : 'text-textMuted hover:bg-bgMain'}`}>
-                  <User size={16} /> Account Info
+                  <User size={16} /> {t('profile.info')}
                 </button>
-                {user.role === 'admin' && (
-                  <button onClick={() => navigate('/admin')}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm text-textMuted hover:bg-bgMain transition-colors">
-                    <Settings size={16} /> Admin Dashboard
-                  </button>
-                )}
+                <button onClick={() => navigate('/dashboard')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm text-textMuted hover:bg-bgMain transition-colors">
+                  <Settings size={16} /> {t('admin.title')}
+                </button>
                 <button onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm text-red-500 hover:bg-red-50 transition-colors">
-                  <LogOut size={16} /> Logout
+                  <LogOut size={16} /> {t('nav.logout')}
                 </button>
               </div>
             </div>
@@ -91,14 +197,14 @@ export default function Profile() {
             {activeTab === 'info' && (
               <div className="bg-white p-6 rounded-2xl shadow-soft border border-sand/50">
                 <h2 className="text-xl font-bold text-textMain mb-6 flex items-center gap-2">
-                  <User size={20} className="text-sageDark" /> Account Information
+                  <User size={20} className="text-sageDark" /> {t('profile.account_info')}
                 </h2>
                 <div className="space-y-4">
                   {[
-                    { label: 'Full Name', value: user.name },
-                    { label: 'Email', value: user.email || '—' },
-                    { label: 'Mobile', value: user.mobile || '—' },
-                    { label: 'Account Type', value: user.role === 'admin' ? 'Administrator' : 'Customer' },
+                    { label: t('profile.labels.name'), value: user.name },
+                    { label: t('profile.labels.email'), value: user.email || '—' },
+                    { label: t('profile.labels.mobile'), value: user.mobile || '—' },
+                    { label: t('profile.labels.role'), value: user.role === 'admin' ? t('admin.admin_role') : t('admin.cust_role') },
                   ].map(item => (
                     <div key={item.label} className="flex items-start gap-4 p-4 bg-bgMain rounded-xl">
                       <div>
@@ -120,8 +226,8 @@ export default function Profile() {
             {activeTab === 'orders' && (
               <div className="bg-white p-6 rounded-2xl shadow-soft border border-sand/50">
                 <h2 className="text-xl font-bold text-textMain mb-6 flex items-center gap-2">
-                  <Package size={20} className="text-sageDark" /> Order History
-                  <span className="ml-auto text-sm font-normal text-textMuted">{orders.length} orders</span>
+                  <Package size={20} className="text-sageDark" /> {t('profile.orders')}
+                  <span className="ml-auto text-sm font-normal text-textMuted font-bold">{orders.length} {t('profile.orders_count_label')}</span>
                 </h2>
 
                 {loading ? (
@@ -131,17 +237,16 @@ export default function Profile() {
                 ) : orders.length === 0 ? (
                   <div className="text-center py-16">
                     <ShoppingBag size={48} className="mx-auto text-textMuted opacity-30 mb-4" />
-                    <p className="font-bold text-textMain mb-2">No orders yet</p>
-                    <p className="text-sm text-textMuted mb-6">Start shopping to see your orders here</p>
+                    <p className="font-bold text-textMain mb-2">{t('profile.no_orders')}</p>
+                    <p className="text-sm text-textMuted mb-6">{t('profile.start_shopping')}</p>
                     <Link to="/products"
                       className="inline-block bg-sageDark hover:bg-sageDeep text-white font-bold px-6 py-3 rounded-xl transition-colors">
-                      Browse Products
+                      {t('profile.browse_products')}
                     </Link>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {orders.map((o) => {
-                      const statusInfo = STATUS_COLORS[o.status] || STATUS_COLORS.pending
                       const isExpanded = expanded === o.id
                       return (
                         <div key={o.id} className="border border-sand rounded-xl overflow-hidden">
@@ -152,14 +257,11 @@ export default function Profile() {
                             <div>
                               <p className="font-bold text-sm text-textMain">{o.invoice_no}</p>
                               <p className="text-xs text-textMuted mt-0.5">
-                                {new Date(o.created_at).toLocaleDateString('en-GB')} · {o.items?.length || 0} items
+                                {new Date(o.created_at).toLocaleDateString('en-GB')} · {o.items?.length || 0} {t('profile.items_label')}
                               </p>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: statusInfo.bg, color: statusInfo.text }}>
-                                {statusInfo.label}
-                              </span>
-                              <span className="font-bold text-textMain">₹{o.total}</span>
+                              <span className="font-bold text-textMain uppercase tracking-tight">₹{o.total}</span>
                               {isExpanded ? <ChevronUp size={16} className="text-textMuted" /> : <ChevronDown size={16} className="text-textMuted" />}
                             </div>
                           </div>
@@ -168,12 +270,12 @@ export default function Profile() {
                             <div className="border-t border-sand bg-white p-4">
                               <div className="mb-4 pb-4 border-b border-sand/50 text-sm grid grid-cols-2 gap-3">
                                 <div>
-                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">Customer</p>
+                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">{t('profile.labels.customer')}</p>
                                   <p className="font-medium text-textMain">{o.customer_name}</p>
                                   <p className="text-textMuted">{o.phone}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">Address</p>
+                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">{t('profile.labels.address')}</p>
                                   <p className="text-textMuted">{o.address}</p>
                                 </div>
                               </div>

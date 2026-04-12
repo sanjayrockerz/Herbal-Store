@@ -8,11 +8,12 @@
   body {
     background-color: #F7F6F2;
     color: #2C392A;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', 'Noto Sans Tamil', sans-serif;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Poppins', 'Noto Sans Tamil', sans-serif;
   }
 }
 
@@ -37,3 +38,51 @@
   min-height: 100vh;
   background-color: #F7F6F2;
 }
+
+
+/* ── PRINT STYLES — A4 single-page invoice ─────────────────────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm 15mm 15mm 15mm;
+  }
+
+  html, body, #root {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    color: #000 !important;
+  }
+
+  /* Hide everything except the invoice element */
+  body > * { visibility: hidden !important; }
+  #root > * { visibility: hidden !important; }
+
+  #invoice-print-root,
+  #invoice-print-root * {
+    visibility: visible !important;
+  }
+
+  #invoice-print-root {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    page-break-inside: avoid;
+  }
+
+  .print-hidden,
+  nav,
+  footer,
+  .print-hidden { display: none !important; }
+}
+

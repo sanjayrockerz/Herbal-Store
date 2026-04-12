@@ -1,6 +1,7 @@
 import { Leaf, Phone, Mail, MapPin } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useLangStore } from '../store/langStore'
+import { BRAND_EN, BRAND_SUBTITLE } from '../lib/brand'
 
 export default function Footer() {
   const { t } = useLangStore()
@@ -11,7 +12,10 @@ export default function Footer() {
         <div className="md:col-span-1">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-9 h-9 bg-sageDark rounded-xl flex items-center justify-center"><Leaf size={18} className="text-white" /></div>
-            <p className="font-bold text-white text-lg font-headline">Sri Siddha</p>
+            <div>
+              <p className="font-bold text-white text-lg font-headline leading-tight">{BRAND_EN}</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-sage font-bold">{BRAND_SUBTITLE}</p>
+            </div>
           </div>
           <p className="text-sm text-gray-400 leading-relaxed mb-4">{t('footer.desc')}</p>
           <p className="text-xs text-sage font-bold uppercase tracking-wider">{t('footer.tags')}</p>
@@ -36,7 +40,7 @@ export default function Footer() {
           <h5 className="text-white font-bold mb-5 uppercase text-xs tracking-widest">{t('footer.contact')}</h5>
           <ul className="flex flex-col gap-4 text-sm">
             <li className="flex items-start gap-3"><MapPin size={15} className="text-sage mt-0.5 shrink-0" /><span>123 Herbal Valley, Nature Hub District, Tamil Nadu 600001</span></li>
-            <li className="flex items-center gap-3"><Phone size={15} className="text-sage shrink-0" /><span>+91 98765 43210</span></li>
+            <li className="flex items-center gap-3"><Phone size={15} className="text-sage shrink-0" /><span>+91 86106 32662</span></li>
             <li className="flex items-center gap-3"><Mail size={15} className="text-sage shrink-0" /><span>support@srisiddha.in</span></li>
           </ul>
         </div>

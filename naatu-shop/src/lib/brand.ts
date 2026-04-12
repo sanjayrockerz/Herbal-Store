@@ -1,0 +1,5 @@
+export const BRAND_EN = 'Thirupathi Balaji Herbal Store'
+export const BRAND_TA = 'திருப்பதி பாலாஜி நாட்டு மருந்து கடை'
+export const BRAND_SUBTITLE = 'Traditional Siddha Herbal Store'
+export const BRAND_WHATSAPP = '+91 86106 32662'
+export const WHATSAPP_NUM = '918610632662'

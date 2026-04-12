@@ -53,10 +53,10 @@ export const authService = {
       return {
         user: {
           id: data.user.id,
-          name: profile?.name || params.name,
-          mobile: profile?.mobile || params.mobile,
+          name: profile?.name || data.user.user_metadata?.name || params.name,
+          mobile: profile?.mobile || data.user.user_metadata?.mobile || params.mobile,
           email: data.user.email || params.email,
-          role: profile?.role || 'customer',
+          role: profile?.role === 'admin' || (data.user.email || params.email).toLowerCase() === ADMIN_EMAIL ? 'admin' : 'customer',
         },
         error: null,
       }
@@ -113,10 +113,10 @@ export const authService = {
       return {
         user: {
           id: data.user.id,
-          name: profile?.name || data.user.email || '',
-          mobile: profile?.mobile || '',
+          name: profile?.name || data.user.user_metadata?.name || data.user.email || '',
+          mobile: profile?.mobile || data.user.user_metadata?.mobile || '',
           email: data.user.email || '',
-          role: profile?.role || 'customer',
+          role: profile?.role === 'admin' || (data.user.email || '').toLowerCase() === ADMIN_EMAIL ? 'admin' : 'customer',
         },
         error: null,
       }
@@ -152,10 +152,10 @@ export const authService = {
 
       return {
         id: user.id,
-        name: profile?.name || user.email || '',
-        mobile: profile?.mobile || '',
+        name: profile?.name || user.user_metadata?.name || user.email || '',
+        mobile: profile?.mobile || user.user_metadata?.mobile || '',
         email: user.email || '',
-        role: profile?.role || 'customer',
+        role: profile?.role === 'admin' || (user.email || '').toLowerCase() === ADMIN_EMAIL ? 'admin' : 'customer',
       }
     }
 
@@ -201,10 +201,10 @@ export const authService = {
             .single()
           callback({
             id: session.user.id,
-            name: profile?.name || session.user.email || '',
-            mobile: profile?.mobile || '',
+            name: profile?.name || session.user.user_metadata?.name || session.user.email || '',
+            mobile: profile?.mobile || session.user.user_metadata?.mobile || '',
             email: session.user.email || '',
-            role: profile?.role || 'customer',
+            role: profile?.role === 'admin' || (session.user.email || '').toLowerCase() === ADMIN_EMAIL ? 'admin' : 'customer',
           })
         } else {
           callback(null)
@@ -214,5 +214,21 @@ export const authService = {
     }
     // No-op for localStorage mode
     return () => {}
+  },
+
+  verifyOtp: async (email: string, token: string): Promise<{ error: string | null }> => {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'signup',
+      })
+      if (error) return { error: error.message }
+      if (!data.session) return { error: 'Verification failed' }
+      return { error: null }
+    }
+    // localStorage mode simulation
+    if (token === '123456') return { error: null }
+    return { error: 'Invalid OTP' }
   },
 }

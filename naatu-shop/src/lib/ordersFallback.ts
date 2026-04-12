@@ -1,0 +1,83 @@
+export type LocalOrderItem = {
+  id?: number | null
+  name: string
+  nameTa?: string | null
+  price: number
+  offerPrice?: number | null
+  qty: number
+  image?: string | null
+}
+
+export type LocalOrder = {
+  id: string
+  invoice_no: string
+  user_id: string | null
+  customer_name: string
+  phone: string
+  address: string
+  items: LocalOrderItem[]
+  subtotal: number
+  shipping: number
+  total: number
+  status: 'pending' | 'processing' | 'completed' | 'cancelled'
+  created_at: string
+}
+
+const STORAGE_KEY = 'siddha_orders'
+
+export function getLocalOrders(): LocalOrder[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function saveLocalOrders(orders: LocalOrder[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(orders))
+}
+
+export function createLocalOrder(input: {
+  userId?: string | null
+  customerName: string
+  phone: string
+  address: string
+  items: LocalOrderItem[]
+  subtotal: number
+  shipping: number
+  total: number
+}): LocalOrder {
+  const now = new Date()
+  const order: LocalOrder = {
+    id: `local-${Date.now()}`,
+    invoice_no: `BALA-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+    user_id: input.userId || null,
+    customer_name: input.customerName,
+    phone: input.phone,
+    address: input.address,
+    items: input.items,
+    subtotal: input.subtotal,
+    shipping: input.shipping,
+    total: input.total,
+    status: 'pending',
+    created_at: now.toISOString(),
+  }
+
+  const all = getLocalOrders()
+  saveLocalOrders([order, ...all])
+  return order
+}
+
+export function getLocalOrdersForUser(input: { userId?: string; phone?: string }) {
+  const orders = getLocalOrders()
+  const cleanPhone = (input.phone || '').replace(/\D/g, '')
+
+  return orders.filter((order) => {
+    if (input.userId && order.user_id && order.user_id === input.userId) return true
+    if (cleanPhone && (order.phone || '').replace(/\D/g, '') === cleanPhone) return true
+    return false
+  })
+}

@@ -4,100 +4,90 @@ import { Link } from 'react-router-dom'
 import { useCartStore, useFavStore, type Product } from '../store/store'
 import { useLangStore } from '../store/langStore'
 
-const C = {
-  textMain:  '#2C392A',
-  textMuted: '#5F6D59',
-  sageDark:  '#7DAA8F',
-  sageDeep:  '#5e8c72',
-  sand:      '#EAD7B7',
-  cardBg:    '#FFF8E7',
-}
-
 export default function ProductCard({ product }: { product: Product }) {
-  const add = useCartStore(s => s.add)
+  const add = useCartStore((s) => s.add)
   const { toggle, isFav } = useFavStore()
   const { t, lang } = useLangStore()
   const fav = isFav(product.id)
 
   const displayName = lang === 'ta' && product.nameTa ? product.nameTa : product.name
   const displayBenefits = lang === 'ta' && product.benefitsTa ? product.benefitsTa : product.benefits
+  const salePrice = product.offerPrice && product.offerPrice < product.price ? product.offerPrice : null
+  const discount = salePrice ? Math.round(((product.price - salePrice) / product.price) * 100) : 0
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: 18 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      whileHover={{ y: -5 }}
-      transition={{ duration: 0.22 }}
-      className="flex flex-col relative group overflow-hidden"
-      style={{
-        background: C.cardBg, border: `1px solid rgba(234,215,183,0.7)`,
-        borderRadius: 18, boxShadow: '0 4px 14px rgba(0,0,0,0.05)', transition: 'box-shadow 0.25s ease',
-      }}
-      onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 14px 36px rgba(0,0,0,0.10)')}
-      onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.05)')}
+      transition={{ duration: 0.18 }}
+      className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-sand/60 bg-white shadow-sm transition-shadow hover:shadow-md"
     >
-      {product.stock <= 15 && (
-        <div className="absolute top-3 left-3 z-10" style={{ background: '#FEF3C7', color: '#92400E', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      {product.stock <= 15 ? (
+        <div className="absolute left-2 top-2 z-10 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
           {product.stock === 0 ? t('card.out_of_stock') : t('card.low_stock')}
         </div>
-      )}
+      ) : null}
 
-      <motion.button whileTap={{ scale: 0.82 }} onClick={() => toggle(product)}
-        className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center rounded-full"
-        style={{ background: 'rgba(255,255,255,0.92)', boxShadow: '0 2px 8px rgba(0,0,0,0.10)' }}>
-        <Heart size={15} style={{ fill: fav ? '#F43F5E' : 'none', stroke: fav ? '#F43F5E' : '#9CA3AF' }} />
+      <motion.button
+        whileTap={{ scale: 0.9 }}
+        onClick={() => void toggle(product)}
+        className={`absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border ${fav ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white/90'}`}
+        type="button"
+        aria-label={fav ? 'Remove from favourites' : 'Add to favourites'}
+      >
+        <Heart size={14} className={fav ? 'fill-rose-500 text-rose-500' : 'text-slate-400'} />
       </motion.button>
 
-      <Link to={`/product/${product.id}`} className="w-full overflow-hidden block" style={{ aspectRatio: '1', background: '#fff' }}>
-        <img src={product.image} alt={product.name} loading="lazy"
-          onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=400&q=80' }}
-          className="w-full h-full object-cover transition-transform duration-500" style={{ transform: 'scale(1)' }}
-          onMouseEnter={e => ((e.target as HTMLImageElement).style.transform = 'scale(1.08)')}
-          onMouseLeave={e => ((e.target as HTMLImageElement).style.transform = 'scale(1)')} />
+      <Link to={`/product/${product.id}`} className="block aspect-square w-full overflow-hidden bg-slate-50">
+        <img
+          src={product.image}
+          alt={product.name}
+          loading="lazy"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1514996937319-344454492b37?w=600&q=80'
+          }}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
       </Link>
 
-      <div className="flex flex-col flex-grow gap-1.5" style={{ padding: '14px 16px' }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: C.sageDark }}>
+      <div className="flex flex-1 flex-col gap-1.5 p-3">
+        <span className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-sageDark">
           {t('cat.' + product.category)}
         </span>
-        <h3 className="overflow-hidden" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 13, color: C.textMain, lineHeight: 1.4, minHeight: 36, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+        <h3 className="line-clamp-2 min-h-9 text-[13px] font-semibold leading-4 text-textMain">
           {displayName}
         </h3>
-        <p className="overflow-hidden" style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+        <p className="line-clamp-2 min-h-8 text-[11px] leading-4 text-textMuted">
           {displayBenefits}
         </p>
-        <div className="flex items-center gap-1">
-          <Star size={11} style={{ fill: '#FBBF24', stroke: '#FBBF24' }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#4B5563' }}>{product.rating}</span>
-          <span style={{ fontSize: 11, color: '#9CA3AF' }}>· {product.unit}</span>
+        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+          <Star size={11} className="fill-amber-400 text-amber-400" />
+          <span className="font-semibold text-slate-700">{product.rating.toFixed(1)}</span>
+          <span>· {product.unit}</span>
         </div>
 
-        <div className="flex items-center justify-between mt-auto" style={{ paddingTop: 12, borderTop: `1px solid rgba(234,215,183,0.7)` }}>
-          <div className="flex flex-col">
-            {product.offerPrice ? (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <span style={{ color: '#9CA3AF', textDecoration: 'line-through', fontSize: 12 }}>₹{product.price}</span>
-                  <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>
-                    {Math.round(((product.price - product.offerPrice) / product.price) * 100)}% OFF
-                  </span>
+        <div className="mt-auto flex items-end justify-between border-t border-sand/60 pt-2">
+          <div>
+            {salePrice ? (
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] text-slate-400 line-through">Rs {product.price}</span>
+                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">{discount}% OFF</span>
                 </div>
-                <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 18, color: '#16A34A' }}>₹{product.offerPrice}</span>
-              </>
+                <span className="text-base font-bold text-emerald-700">Rs {salePrice}</span>
+              </div>
             ) : (
-              <span style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: 18, color: C.textMain }}>₹{product.price}</span>
+              <span className="text-base font-bold text-textMain">Rs {product.price}</span>
             )}
           </div>
           <motion.button
-            whileTap={{ scale: 0.88 }} onClick={() => product.stock > 0 && add(product)} disabled={product.stock === 0}
-            className="flex items-center gap-1.5 font-bold rounded-xl transition-colors"
-            style={{
-              background: product.stock === 0 ? '#E5E7EB' : C.sageDark, color: product.stock === 0 ? '#9CA3AF' : '#fff',
-              fontSize: 12, padding: '8px 14px', cursor: product.stock === 0 ? 'not-allowed' : 'pointer', border: 'none', fontFamily: 'Inter, sans-serif',
-            }}>
-            <ShoppingCart size={13} /> {product.stock === 0 ? t('card.sold_out') : t('card.add')}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => product.stock > 0 && add(product)}
+            disabled={product.stock === 0}
+            className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold ${product.stock === 0 ? 'cursor-not-allowed bg-slate-200 text-slate-400' : 'bg-sageDark text-white hover:bg-[#5f8b73]'}`}
+            type="button"
+          >
+            <span className="inline-flex items-center gap-1"><ShoppingCart size={12} /> {product.stock === 0 ? t('card.sold_out') : t('card.add')}</span>
           </motion.button>
         </div>
       </div>

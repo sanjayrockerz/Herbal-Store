@@ -106,31 +106,27 @@ export default function Home() {
               <span className="text-[11px] font-black uppercase tracking-widest">{t('hero.badge')}</span>
             </div>
             
-            <h1 className="text-5xl lg:text-7xl font-black leading-tight mb-6 tracking-tight text-textMain">
-              Authentic Siddha Healing <br className="hidden md:block" />
-              <span style={{ color: C.sageDark }}>for Modern Living</span>
+            <h1 className="text-5xl lg:text-7xl font-black leading-[1.1] mb-6 tracking-tight">
+              {t('hero.title1')} <br />
+              <span style={{ color: C.sageDark }}>{t('hero.title2')}</span>
             </h1>
             
-            <p className="text-lg md:text-xl text-textMuted mb-2 max-w-lg leading-relaxed font-medium">
-              Thirupathi Balaji Herbal Store — Trusted traditional remedies crafted with purity, care, and heritage.
-            </p>
-            <p className="text-sm md:text-base font-bold text-sageDark mb-10">
-              திருப்பதி பாலாஜி நாட்டு மருந்து கடை
+            <p className="text-lg md:text-xl text-textMuted mb-10 max-w-lg leading-relaxed font-medium">
+              {t('hero.subtitle')}
             </p>
 
             <div className="flex flex-wrap gap-4">
-              <Link to="/products" className="px-8 py-4 bg-[#2C392A] text-white font-black rounded-2xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all flex items-center gap-2">
-                Shop Herbal Products <ArrowRight size={18} />
+              <Link to="/products" className="px-8 py-4 bg-[#2C392A] text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-transform flex items-center gap-2">
+                {t('common.shopNow') || 'Shop Now'} <ArrowRight size={18} />
               </Link>
-              <a href="#concerns" className="px-8 py-4 bg-white/70 backdrop-blur-sm text-textMain font-black rounded-2xl border border-sand/50 hover:bg-white hover:shadow-lg transition-all">
-                 Browse by Health Needs
+              <a href="#concerns" className="px-8 py-4 bg-white/50 text-textMain font-black rounded-2xl border border-sand/50 hover:bg-white transition-colors">
+                 {t('remedy.title')}
               </a>
             </div>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8 }} className="relative flex justify-center lg:justify-end">
-            <div className="absolute inset-0 bg-gradient-to-tr from-sage/30 to-transparent rounded-[2rem] blur-3xl transform scale-105 -z-10" />
-            <div className="relative w-full max-w-[480px] aspect-square rounded-[2rem] overflow-hidden shadow-2xl shadow-forestDark/20 bg-[#2C392A]">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8 }} className="relative flex justify-center">
+            <div className="relative w-full max-w-[500px] aspect-square rounded-[3rem] overflow-hidden shadow-2xl border-[12px] border-white/50 bg-[#2C392A]">
               <video 
                 src="/Add_shoot_video_202604072031.mp4" 
                 className="w-full h-full object-cover" 
@@ -140,7 +136,7 @@ export default function Home() {
                 playsInline
                 poster="/Gemini_Generated_Image_zb6vuxzb6vuxzb6v.png"
               />
-              <div className="absolute inset-0 bg-forestDark/5 pointer-events-none" />
+              <div className="absolute inset-0 bg-forestDark/10 pointer-events-none" />
             </div>
             <motion.div 
                animate={{ y: [0, -10, 0] }}
@@ -162,16 +158,13 @@ export default function Home() {
       </section>
 
       {/* ═══ TRUST BADGES ═══ */}
-      <section className="max-w-7xl mx-auto px-4 -mt-10 relative z-20 mb-12">
-        <div className="text-center mb-8">
-           <h2 className="text-2xl md:text-3xl font-black text-textMain">Why Choose Us</h2>
-        </div>
+      <section className="max-w-7xl mx-auto px-4 -mt-10 relative z-20">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { icon: <Leaf />, title: '100% Traditional', sub: 'Siddha Herbs' },
-            { icon: <ShieldCheck />, title: 'No Chemicals', sub: 'Or Adulteration' },
-            { icon: <Award />, title: 'Trusted', sub: 'By Local Families' },
-            { icon: <Sparkles />, title: 'Fresh & Authentic', sub: 'Products' },
+            { icon: <ShieldCheck />, title: t('trust.organic'), sub: t('trust.organic_sub') },
+            { icon: <Truck />, title: t('trust.shipping'), sub: t('trust.shipping_sub') },
+            { icon: <Leaf />, title: t('trust.pure'), sub: t('trust.pure_sub') },
+            { icon: <Award />, title: t('trust.gmp'), sub: t('trust.gmp_sub') },
           ].map((item, idx) => (
             <div key={idx} className="p-5 rounded-2xl bg-white border border-sand/20 shadow-soft flex items-center gap-4 transition-transform hover:-translate-y-1">
               <div style={{ color: C.sageDark }}>{item.icon}</div>
@@ -268,19 +261,22 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ═══ CTA SECTION ═══ */}
-      <section className="bg-sageDark text-white py-20 mt-12">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-           <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">Experience Natural Healing Today</h2>
-           <p className="text-lg md:text-xl text-sage/80 mb-10 font-medium max-w-2xl mx-auto">
-             Discover our complete range of authentic Siddha herbal remedies and embrace a healthier, balanced life.
-           </p>
-           <Link to="/products" className="inline-flex items-center gap-3 px-10 py-5 rounded-2xl bg-white text-forestDark font-black shadow-xl hover:scale-105 transition-transform text-lg">
-              Explore Products <ArrowRight size={20} />
-           </Link>
-        </div>
+      {/* ═══ BOTTOM NAVIGATION ═══ */}
+      <section className="max-w-7xl mx-auto px-4 py-24 text-center">
+         <div className="max-w-3xl mx-auto">
+            <h2 className="text-3xl font-black mb-6">{t('more.title')}</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
+               {featured.slice(0, 4).map(p => (
+                 <div key={p.id} className="opacity-70 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+                    <ProductCard product={p} />
+                 </div>
+               ))}
+            </div>
+            <Link to="/products" className="inline-flex items-center gap-3 px-10 py-5 rounded-full bg-sageDark text-white font-black shadow-xl hover:scale-105 transition-all">
+               {t('more.cta')} <ArrowRight size={20} />
+            </Link>
+         </div>
       </section>
-
 
     </div>
   )

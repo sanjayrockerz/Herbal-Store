@@ -2,16 +2,18 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ShoppingCart, Heart, Search, Menu, X, Leaf } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useCartStore, useAuthStore } from '../store/store'
+import { useCartStore, useFavStore, useAuthStore } from '../store/store'
 import { useLangStore } from '../store/langStore'
-import { CartDrawer } from './Drawers'
-import { BRAND_EN, BRAND_TA } from '../lib/brand'
+import { CartDrawer, FavoritesDrawer } from './Drawers'
+import { BRAND_EN, BRAND_SUBTITLE } from '../lib/brand'
 
 export default function Navbar() {
   const [query, setQuery] = useState('')
   const [showCart, setShowCart] = useState(false)
+  const [showFav, setShowFav] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const count = useCartStore(s => s.count())
+  const favCount = useFavStore(s => s.items.length)
   const user = useAuthStore((s) => s.user)
   const isAdmin = useAuthStore((s) => s.isAdmin())
   const logout = useAuthStore((s) => s.logout)
@@ -40,14 +42,14 @@ export default function Navbar() {
       </div>
 
       <header className="sticky top-0 z-40 glass border-b border-sand/50 shadow-sm">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 lg:gap-4">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 lg:gap-4">
           <Link to="/" className="group flex shrink-0 items-center gap-2 min-w-0">
             <div className="w-9 h-9 bg-sage rounded-xl flex items-center justify-center group-hover:bg-sageDark transition-colors">
               <Leaf size={18} className="text-white" />
             </div>
             <div className="flex min-w-0 flex-col leading-none">
               <p className="truncate text-[13px] font-bold leading-tight tracking-tight text-textMain md:text-[15px] font-headline">{BRAND_EN}</p>
-              <p className="hidden text-[10px] font-bold tracking-wide text-sageDark md:block">{BRAND_TA}</p>
+              <p className="hidden text-[9px] font-bold uppercase tracking-[0.15em] text-sageDark md:block">{BRAND_SUBTITLE}</p>
             </div>
           </Link>
 
@@ -61,12 +63,36 @@ export default function Navbar() {
             </div>
           </form>
 
+          <div className="hidden xl:flex items-center gap-5 text-sm font-semibold text-textMuted">
+            <Link to="/" className="hover:text-textMain transition-colors">{t('nav.home')}</Link>
+            <Link to="/products" className="hover:text-textMain transition-colors">{t('nav.products')}</Link>
+            <Link to="/cart" className="hover:text-textMain transition-colors">{t('nav.cart')}</Link>
+            <Link to="/favorites" className="hover:text-textMain transition-colors">{t('nav.favorites')}</Link>
+            {user && <Link to="/profile" className="hover:text-textMain transition-colors">Profile</Link>}
+            {isAdmin && <Link to="/dashboard" className="hover:text-textMain transition-colors">Dashboard</Link>}
+            {isAdmin && <Link to="/pos" className="hover:text-textMain transition-colors">POS</Link>}
+            {user ? (
+              <button
+                onClick={handleLogout}
+                className="hover:text-textMain transition-colors"
+              >
+                {t('nav.logout')}
+              </button>
+            ) : (
+              <Link to="/login" className="hover:text-textMain transition-colors">{t('nav.login')}</Link>
+            )}
+          </div>
+
           <div className="flex items-center gap-1">
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => setShowFav(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
+              <Heart size={20} className="text-textMuted" />
+              {favCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{favCount}</span>}
+            </motion.button>
             <motion.button whileTap={{ scale: 0.88 }} onClick={() => setShowCart(true)} className="relative p-2 rounded-full hover:bg-sage/20 transition-colors">
               <ShoppingCart size={20} className="text-textMuted" />
               {count > 0 && <span className="absolute -top-0.5 -right-0.5 bg-sageDark text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{count}</span>}
             </motion.button>
-            <button onClick={() => setMobileOpen(!mobileOpen)} className="p-2 rounded-full hover:bg-sage/20 transition-colors ml-1">
+            <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 rounded-full hover:bg-sage/20 transition-colors ml-1">
               {mobileOpen ? <X size={20} className="text-textMain" /> : <Menu size={20} className="text-textMuted" />}
             </button>
           </div>
@@ -75,13 +101,13 @@ export default function Navbar() {
         <AnimatePresence>
           {mobileOpen && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-              className="absolute top-full right-0 w-full md:w-64 border-t border-sand/50 bg-white px-4 py-4 flex flex-col gap-3 shadow-xl rounded-b-2xl md:right-4 md:mt-2 md:border md:rounded-2xl">
-              <form onSubmit={handleSearch} className="flex md:hidden">
+              className="lg:hidden overflow-hidden border-t border-sand/50 bg-white px-4 py-4 flex flex-col gap-3">
+              <form onSubmit={handleSearch} className="flex">
                 <input value={query} onChange={e => setQuery(e.target.value)} type="text" placeholder={t('nav.search_placeholder')}
                   className="flex-grow h-10 px-3 rounded-l-lg border-2 border-sand focus:border-sage outline-none text-sm" />
                 <button type="submit" className="h-10 px-4 bg-sageDark text-white text-sm font-bold rounded-r-lg">{t('nav.search')}</button>
               </form>
-              <div className="grid grid-cols-1 md:grid-cols-1 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {[
                   [t('nav.home'), '/'],
                   [t('nav.products'), '/products'],
@@ -114,6 +140,7 @@ export default function Navbar() {
       </header>
 
       <CartDrawer open={showCart} onClose={() => setShowCart(false)} />
+      <FavoritesDrawer open={showFav} onClose={() => setShowFav(false)} />
     </>
   )
 }

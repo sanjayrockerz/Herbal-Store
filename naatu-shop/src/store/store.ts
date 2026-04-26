@@ -1,27 +1,57 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
+import {
+  calculateLineTotal,
+  getDefaultQuantityForProduct,
+  normalizeSelectedQuantity,
+  normalizeUnitType,
+  toNumber,
+  type QuantityOption,
+  type UnitType,
+} from '../lib/retail'
 
+/**
+ * SRI SIDDHA HERBAL STORE - CORE STATE MANAGEMENT
+ * Unified Store for Auth, Products, and Cart
+ */
+
+// --- Types ---
 export interface Product {
-  id: number
+  id: string | number // Support both legacy numeric IDs and new UUIDs
   name: string
+  nameTa?: string
+  tamilName?: string
   category: string
+  categoryId?: number | string | null
   remedy: string[]
   price: number
-  offerPrice?: number
+  offerPrice?: number | null
+  unitType: UnitType
+  unitLabel: string
+  baseQuantity: number
+  stockQuantity: number
+  stockUnit: string
+  allowDecimalQuantity: boolean
+  predefinedOptions: QuantityOption[]
+  isActive: boolean
+  sortOrder: number
   unit: string
   rating: number
   stock: number
   description: string
   descriptionTa?: string
   benefits: string
-  nameTa?: string
   benefitsTa?: string
   image: string
+  imageUrl?: string
 }
 
 export interface CartItem extends Product {
   qty: number
+  selectedUnit: string
+  basePrice: number
+  lineTotal: number
 }
 
 interface AuthUser {
@@ -33,277 +63,267 @@ interface AuthUser {
 }
 
 interface AuthState {
-  token: string | null
   user: AuthUser | null
   loading: boolean
-  setAuth: (token: string, user: AuthUser) => void
-  logout: () => void
-  initialize: () => Promise<void>
   isAuthenticated: () => boolean
   isAdmin: () => boolean
-}
-
-const ADMIN_EMAIL = 'admin@srisiddha.com'
-let productsFetchInFlight: Promise<void> | null = null
-let lastProductsFetchAt = 0
-
-const hashToPositiveInt = (value: string) => {
-  let hash = 0
-  for (let i = 0; i < value.length; i += 1) {
-    hash = ((hash << 5) - hash) + value.charCodeAt(i)
-    hash |= 0
-  }
-  return Math.abs(hash) || 1
-}
-
-const normalizeProductId = (rawId: unknown, fallbackSeed: string) => {
-  const numericId = Number(rawId)
-  if (Number.isFinite(numericId) && numericId > 0) {
-    return numericId
-  }
-  return hashToPositiveInt(fallbackSeed)
-}
-
-const normalizeRemedy = (rawRemedy: unknown) => {
-  if (Array.isArray(rawRemedy)) {
-    return rawRemedy.map((item) => String(item).trim()).filter(Boolean)
-  }
-
-  if (typeof rawRemedy === 'string' && rawRemedy.trim()) {
-    return rawRemedy
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
-  }
-
-  return [] as string[]
+  setAuth: (user: AuthUser | null) => void
+  logout: () => Promise<void>
+  initialize: () => Promise<void>
 }
 
 interface ProductState {
   products: Product[]
   loading: boolean
   error: string | null
-  fetchProducts: () => Promise<void>
-  upsertProduct: (product: Product) => void
-  removeProduct: (id: number) => void
+  lastFetch: number
+  fetchProducts: (force?: boolean) => Promise<void>
 }
 
 interface CartState {
   items: CartItem[]
-  isOpen: boolean
-  add: (p: Product) => void
-  remove: (id: number) => void
-  updateQty: (id: number, qty: number) => void
+  addItem: (product: Product, quantity: number, unit: string) => void
+  removeItem: (productId: string | number) => void
+  updateQuantity: (productId: string | number, quantity: number) => void
+  clearCart: () => void
+  totalItems: () => number
+  cartSubtotal: () => number
+  // Backward-compatible aliases used by existing UI
+  add: (product: Product) => void
+  remove: (productId: string | number) => void
+  updateQty: (productId: string | number, quantity: number) => void
   clear: () => void
-  total: () => number
   count: () => number
-  setOpen: (v: boolean) => void
+  total: () => number
 }
 
 interface FavState {
   items: Product[]
-  isOpen: boolean
-  toggle: (p: Product) => Promise<void>
-  isFav: (id: number) => boolean
-  setOpen: (v: boolean) => void
-  syncFromServer: () => Promise<void>
+  toggle: (product: Product) => void
+  isFav: (productId: string | number) => boolean
+  clear: () => void
 }
 
+type SessionFallback = {
+  id?: string
+  email?: string | null
+  phone?: string | null
+  user_metadata?: {
+    name?: string
+    mobile?: string
+  }
+}
+
+const asRecord = (value: unknown): Record<string, unknown> => {
+  if (typeof value === 'object' && value !== null) {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
+const readString = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback)
+
+const toAuthUser = (profile: unknown, fallback?: SessionFallback): AuthUser => {
+  const profileRow = asRecord(profile)
+  const fallbackMeta = asRecord(fallback?.user_metadata)
+
+  return {
+    id: String(profileRow.id || fallback?.id || ''),
+    name: String(profileRow.name || fallbackMeta.name || fallback?.email || 'Customer'),
+    email: String(profileRow.email || fallback?.email || ''),
+    mobile: String(profileRow.mobile || fallbackMeta.mobile || fallback?.phone || ''),
+    role: profileRow.role === 'admin' ? 'admin' : 'customer',
+  }
+}
+
+const mapDbProduct = (input: unknown): Product => {
+  const p = asRecord(input)
+  const image = readString(p.image_url) || readString(p.image) || '/assets/images/default-herb.jpg'
+  const remedy = Array.isArray(p.remedy)
+    ? p.remedy.filter((entry): entry is string => typeof entry === 'string')
+    : []
+
+  return {
+    id: String(p.id || ''),
+    name: readString(p.name, 'Herbal Product'),
+    nameTa: readString(p.name_ta) || readString(p.tamil_name),
+    tamilName: readString(p.tamil_name) || readString(p.name_ta),
+    category: readString(p.category, 'Herbal Product'),
+    categoryId: typeof p.category_id === 'string' || typeof p.category_id === 'number' ? p.category_id : null,
+    remedy,
+    price: toNumber(p.price, 0),
+    offerPrice: p.offer_price != null ? toNumber(p.offer_price, 0) : null,
+    unitType: normalizeUnitType(p.unit_type, 'unit'),
+    unitLabel: readString(p.unit_label, 'piece'),
+    baseQuantity: toNumber(p.base_quantity, 1),
+    stockQuantity: toNumber(p.stock_quantity, 0),
+    stockUnit: readString(p.stock_unit, 'piece'),
+    allowDecimalQuantity: Boolean(p.allow_decimal_quantity),
+    predefinedOptions: Array.isArray(p.predefined_options) ? p.predefined_options as QuantityOption[] : [],
+    isActive: p.is_active !== false,
+    sortOrder: toNumber(p.sort_order, 0),
+    unit: readString(p.unit, '100g'),
+    rating: toNumber(p.rating, 4.7),
+    stock: Math.floor(toNumber(p.stock_quantity ?? p.stock, 0)),
+    description: readString(p.description),
+    descriptionTa: readString(p.description_ta),
+    benefits: readString(p.benefits),
+    benefitsTa: readString(p.benefits_ta),
+    image,
+    imageUrl: image,
+  }
+}
+
+// --- Auth Store ---
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
-      token: null,
+    (set, get): AuthState => ({
       user: null,
       loading: true,
-      setAuth: (token, user) => {
-        localStorage.setItem('srisiddha-token', token)
-        set({ token, user, loading: false })
-      },
-      logout: () => {
-        localStorage.removeItem('srisiddha-token')
-        set({ token: null, user: null, loading: false })
+      isAuthenticated: () => !!get().user,
+      isAdmin: () => get().user?.role === 'admin',
+      setAuth: (user: AuthUser | null) => set({ user, loading: false }),
+      logout: async () => {
+        await supabase.auth.signOut()
+        set({ user: null, loading: false })
       },
       initialize: async () => {
+        set({ loading: true })
         try {
-          const { data: sessionData } = await supabase.auth.getSession()
-          const session = sessionData.session
-          if (!session?.access_token || !session.user) {
-            set({ token: null, user: null, loading: false })
-            return
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single()
+
+            set({ user: toAuthUser(profile, session.user) })
           }
-
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single()
-
-          set({
-            token: session.access_token,
-            user: {
-              id: session.user.id,
-              name: profile?.name || session.user.email || session.user.phone || 'Customer',
-              email: session.user.email || '',
-              mobile: profile?.mobile || session.user.phone || '',
-              role: profile?.role === 'admin' || session.user.email?.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'customer',
-            },
-            loading: false,
-          })
-        } catch {
-          set({ token: null, user: null, loading: false })
+        } catch (e) {
+          console.error('Auth init error', e)
+        } finally {
+          set({ loading: false })
         }
-      },
-      isAuthenticated: () => !!get().token,
-      isAdmin: () => get().user?.role === 'admin' || get().user?.email?.toLowerCase() === ADMIN_EMAIL,
+      }
     }),
-    { name: 'srisiddha-auth' },
-  ),
+    { name: 'sri-siddha-auth' }
+  )
 )
 
+// --- Product Store ---
 export const useProductStore = create<ProductState>((set, get) => ({
   products: [],
   loading: false,
   error: null,
-  fetchProducts: async () => {
-    if (productsFetchInFlight) {
-      return productsFetchInFlight
+  lastFetch: 0,
+  fetchProducts: async (force = false) => {
+    if (!force && Date.now() - get().lastFetch < 300000 && get().products.length > 0) return
+
+    set({ loading: true, error: null })
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('sort_order', { ascending: true })
+
+      if (error) throw error
+
+      const normalized = (data || []).map(mapDbProduct)
+
+      set({ products: normalized, loading: false, lastFetch: Date.now() })
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Unable to fetch products',
+        loading: false,
+      })
     }
-
-    if (Date.now() - lastProductsFetchAt < 400 && get().products.length > 0) {
-      return
-    }
-
-    productsFetchInFlight = (async () => {
-      set({ loading: true, error: null })
-      try {
-        if (isSupabaseConfigured) {
-          const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .order('id', { ascending: true })
-
-          if (error) {
-            set({ products: [], loading: false, error: error.message || 'Failed to load live products' })
-            return
-          }
-
-          const liveRows = Array.isArray(data) ? data : []
-          if (liveRows.length === 0) {
-            set({
-              products: [],
-              loading: false,
-              error: 'Live products table is empty. Admin should add products in Supabase.',
-            })
-            return
-          }
-
-          const mapped = liveRows.map((product: any, index: number) => {
-            const name = String(product.name || 'Herbal Product')
-            const category = String(product.category || 'Herbal Product')
-            const fallbackSeed = `${name}-${category}-${index}`
-
-            return {
-              id: normalizeProductId(product.id, fallbackSeed),
-              name,
-              category,
-              remedy: normalizeRemedy(product.remedy),
-              price: Number(product.price) || 0,
-              offerPrice: product.offer_price == null ? undefined : Number(product.offer_price),
-              unit: String(product.unit || '100g'),
-              rating: Number(product.rating) || 4.7,
-              stock: Number(product.stock) || 0,
-              description: String(product.description || ''),
-              descriptionTa: String(product.description_ta || ''),
-              benefits: String(product.benefits || ''),
-              nameTa: String(product.name_ta || name),
-              benefitsTa: String(product.benefits_ta || product.benefits || ''),
-              image: String(product.image || product.image_url || '/assets/images/default-herb.jpg'),
-            }
-          }) as Product[]
-
-          set({ products: mapped, loading: false, error: null })
-          return
-        }
-
-        set({ products: [], loading: false, error: 'Supabase is not configured. Live products cannot be loaded.' })
-      } catch (error) {
-        set({
-          loading: false,
-          products: [],
-          error: error instanceof Error ? error.message : 'Failed to load live products',
-        })
-      }
-    })().finally(() => {
-      lastProductsFetchAt = Date.now()
-      productsFetchInFlight = null
-    })
-
-    return productsFetchInFlight
-  },
-  upsertProduct: (product) => {
-    const existing = get().products.find((item) => item.id === product.id)
-    if (existing) {
-      set({ products: get().products.map((item) => (item.id === product.id ? product : item)) })
-    } else {
-      set({ products: [product, ...get().products] })
-    }
-  },
-  removeProduct: (id) => {
-    set({ products: get().products.filter((item) => item.id !== id) })
-  },
+  }
 }))
 
+// --- Cart Store ---
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
-      isOpen: false,
-      setOpen: (v) => set({ isOpen: v }),
-      add: (product) => {
-        const items = get().items
-        const existing = items.find((item) => item.id === product.id)
+      addItem: (product, qty, unit) => {
+        const items = [...get().items]
+        const existing = items.find(i => i.id === product.id)
+        
+        const basePrice = product.offerPrice || product.price
+        const lineTotal = calculateLineTotal(qty, product.unitType, product.baseQuantity, basePrice)
+
         if (existing) {
-          set({ items: items.map((item) => (item.id === product.id ? { ...item, qty: item.qty + 1 } : item)) })
+          existing.qty += qty
+          existing.lineTotal = calculateLineTotal(existing.qty, existing.unitType, existing.baseQuantity, basePrice)
         } else {
-          set({ items: [...items, { ...product, qty: 1 }] })
+          items.push({
+            ...product,
+            qty,
+            selectedUnit: unit,
+            basePrice,
+            lineTotal
+          })
         }
+        set({ items })
       },
-      remove: (id) => set((state) => ({ items: state.items.filter((item) => item.id !== id) })),
-      updateQty: (id, qty) => {
-        if (qty < 1) {
-          get().remove(id)
-          return
-        }
-        set((state) => ({ items: state.items.map((item) => (item.id === id ? { ...item, qty } : item)) }))
+      removeItem: (id) => set({ items: get().items.filter(i => i.id !== id) }),
+      updateQuantity: (id, qty) => {
+        const items = get().items.map(item => {
+          if (item.id === id) {
+            const newQty = Math.max(item.unitType === 'unit' ? 1 : 0.001, qty)
+            return {
+               ...item,
+               qty: newQty,
+               lineTotal: calculateLineTotal(newQty, item.unitType, item.baseQuantity, item.basePrice)
+            }
+          }
+          return item
+        })
+        set({ items })
       },
-      clear: () => set({ items: [] }),
-      total: () => get().items.reduce((sum, item) => sum + item.price * item.qty, 0),
-      count: () => get().items.reduce((sum, item) => sum + item.qty, 0),
+      clearCart: () => set({ items: [] }),
+      totalItems: () => get().items.length,
+      cartSubtotal: () => get().items.reduce((sum, item) => sum + item.lineTotal, 0),
+      add: (product) => {
+        const defaultQty = getDefaultQuantityForProduct({
+          unitType: product.unitType,
+          baseQuantity: product.baseQuantity,
+          predefinedOptions: product.predefinedOptions,
+        })
+        const qty = normalizeSelectedQuantity(
+          defaultQty,
+          product.unitType,
+          product.allowDecimalQuantity,
+          product.unitType === 'unit' || product.unitType === 'bundle' ? 1 : Math.max(product.baseQuantity, 0.001),
+        )
+        get().addItem(product, qty, product.unitLabel)
+      },
+      remove: (productId) => get().removeItem(productId),
+      updateQty: (productId, quantity) => get().updateQuantity(productId, quantity),
+      clear: () => get().clearCart(),
+      count: () => get().totalItems(),
+      total: () => get().cartSubtotal(),
     }),
-    { name: 'srisiddha-cart' },
-  ),
+    { name: 'sri-siddha-cart' }
+  )
 )
 
 export const useFavStore = create<FavState>()(
   persist(
     (set, get) => ({
       items: [],
-      isOpen: false,
-      setOpen: (v) => set({ isOpen: v }),
-      toggle: async (product) => {
-        const exists = !!get().items.find((item) => item.id === product.id)
-
+      toggle: (product) => {
+        const exists = get().items.some((p) => p.id === product.id)
         if (exists) {
-          set((state) => ({ items: state.items.filter((item) => item.id !== product.id) }))
-        } else {
-          set((state) => ({ items: [...state.items, product] }))
+          set({ items: get().items.filter((p) => p.id !== product.id) })
+          return
         }
+        set({ items: [...get().items, product] })
       },
-      isFav: (id) => !!get().items.find((item) => item.id === id),
-      syncFromServer: async () => {
-        return
-      },
+      isFav: (productId) => get().items.some((p) => p.id === productId),
+      clear: () => set({ items: [] }),
     }),
-    { name: 'srisiddha-favorites' },
+    { name: 'sri-siddha-favorites' },
   ),
 )

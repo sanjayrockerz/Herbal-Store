@@ -4,6 +4,7 @@ import { useCartStore, useFavStore } from '../store/store'
 import { useLangStore } from '../store/langStore'
 import { Link } from 'react-router-dom'
 import { BRAND_EN } from '../lib/brand'
+import { formatCurrency, formatPricePerUnit, formatQuantityDisplay, getDefaultQuantityForProduct } from '../lib/retail'
 
 export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { items, remove, updateQty, total, count, clear } = useCartStore()
@@ -11,14 +12,22 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
   const sub = total()
   const shipping = sub >= 500 ? 0 : (sub === 0 ? 0 : 50)
   const grand = sub + shipping
+  const getStep = (item: (typeof items)[number]) => {
+    if (item.unitType === 'unit' || item.unitType === 'bundle') return 1
+    return getDefaultQuantityForProduct({
+      unitType: item.unitType,
+      baseQuantity: item.baseQuantity,
+      predefinedOptions: item.predefinedOptions,
+    })
+  }
   const PHONE = '918610632662'
   const waText = encodeURIComponent(
     `🌿 *${BRAND_EN}* — Cart Order\n\n` +
     items.map(i => {
       const dbName = lang === 'ta' && i.nameTa ? i.nameTa : i.name;
-      return `• ${dbName} ×${i.qty} — ₹${i.price * i.qty}`
+      return `• ${dbName} (${formatQuantityDisplay(i.qty, i.selectedUnit, i.unitType)}) — ${formatCurrency(i.lineTotal)}`
     }).join('\n') +
-    `\n\nShipping: ${shipping === 0 && sub > 0 ? 'FREE' : `₹${shipping}`}\n*Total: ₹${grand}*`
+    `\n\nShipping: ${shipping === 0 && sub > 0 ? 'FREE' : formatCurrency(shipping)}\n*Total: ${formatCurrency(grand)}*`
   )
 
   return (
@@ -55,13 +64,14 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
                           {lang === 'ta' && item.nameTa ? item.nameTa : item.name}
                         </h4>
                         <p className="text-xs text-gray-400 mb-2">{t('cat.' + item.category)}</p>
+                        <p className="text-[11px] text-sageDark font-bold mb-2">{formatPricePerUnit(item.basePrice, item.baseQuantity, item.unitLabel, item.unitType)}</p>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-0.5 border border-sand rounded-lg bg-white overflow-hidden">
-                            <button onClick={() => updateQty(item.id, item.qty - 1)} className="w-7 h-7 flex items-center justify-center hover:bg-gray-50 text-gray-500"><Minus size={11} /></button>
-                            <span className="w-7 text-center text-sm font-bold text-textMain">{item.qty}</span>
-                            <button onClick={() => updateQty(item.id, item.qty + 1)} className="w-7 h-7 flex items-center justify-center hover:bg-gray-50 text-gray-500"><Plus size={11} /></button>
+                            <button onClick={() => updateQty(item.id, item.qty - getStep(item))} className="w-7 h-7 flex items-center justify-center hover:bg-gray-50 text-gray-500"><Minus size={11} /></button>
+                            <span className="min-w-12 px-1 text-center text-xs font-bold text-textMain">{formatQuantityDisplay(item.qty, item.selectedUnit, item.unitType)}</span>
+                            <button onClick={() => updateQty(item.id, item.qty + getStep(item))} className="w-7 h-7 flex items-center justify-center hover:bg-gray-50 text-gray-500"><Plus size={11} /></button>
                           </div>
-                          <span className="font-bold text-textMain text-sm">₹{item.price * item.qty}</span>
+                          <span className="font-bold text-textMain text-sm">{formatCurrency(item.lineTotal)}</span>
                         </div>
                       </div>
                       <button onClick={() => remove(item.id)} className="self-start p-1 text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
@@ -73,13 +83,13 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
 
             {items.length > 0 && (
               <div className="px-4 py-4 border-t border-gray-100 space-y-3">
-                <div className="flex justify-between text-sm"><span className="text-gray-500">{t('drawer.subtotal')}</span><span className="font-bold text-textMain">₹{sub}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">{t('drawer.subtotal')}</span><span className="font-bold text-textMain">{formatCurrency(sub)}</span></div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">{t('drawer.shipping')}</span>
-                  <span className={shipping === 0 ? 'text-sageDark font-bold' : 'font-bold text-textMain'}>{shipping === 0 ? t('cart.free') : `₹${shipping}`}</span>
+                  <span className={shipping === 0 ? 'text-sageDark font-bold' : 'font-bold text-textMain'}>{shipping === 0 ? t('cart.free') : formatCurrency(shipping)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-textMain text-base border-t pt-3">
-                  <span>{t('drawer.total')}</span><span>₹{grand}</span>
+                  <span>{t('drawer.total')}</span><span>{formatCurrency(grand)}</span>
                 </div>
                 <a href={`https://wa.me/${PHONE}?text=${waText}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition-colors">
                   <MessageCircle size={16} /> {t('drawer.send_wa')}
@@ -131,7 +141,7 @@ export function FavoritesDrawer({ open, onClose }: { open: boolean; onClose: () 
                         </h4>
                         <p className="text-xs text-sageDark font-bold">{t('cat.' + item.category)}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="font-bold text-textMain">₹{item.price}</span>
+                          <span className="font-bold text-textMain">{formatPricePerUnit(item.offerPrice || item.price, item.baseQuantity, item.unitLabel, item.unitType)}</span>
                           <button onClick={() => { add(item); onClose() }} className="flex items-center gap-1 bg-sageDark hover:bg-sageDeep text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors">
                             <ShoppingBag size={11} /> {t('drawer.add')}
                           </button>

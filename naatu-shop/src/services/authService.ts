@@ -14,12 +14,60 @@ export interface AuthUser {
 }
 
 const ADMIN_EMAIL = 'admin@srisiddha.com'
-const ADMIN_MOBILE = '9999999999'
-const ADMIN_PASSWORD = 'admin123'
+
+type LocalUser = {
+  id: string
+  name: string
+  mobile: string
+  email: string
+  password: string
+  role: 'admin' | 'customer'
+  created_at: string
+  orders: unknown[]
+}
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (typeof value === 'object' && value !== null) {
+    return value as Record<string, unknown>
+  }
+  return null
+}
+
+const normalizeLocalUser = (value: unknown): LocalUser | null => {
+  const record = asRecord(value)
+  if (!record) return null
+
+  const id = typeof record.id === 'string' ? record.id : ''
+  const email = typeof record.email === 'string' ? record.email : ''
+  if (!id || !email) return null
+
+  return {
+    id,
+    name: typeof record.name === 'string' ? record.name : 'Customer',
+    mobile: typeof record.mobile === 'string' ? record.mobile : '',
+    email,
+    password: typeof record.password === 'string' ? record.password : '',
+    role: record.role === 'admin' ? 'admin' : 'customer',
+    created_at: typeof record.created_at === 'string' ? record.created_at : new Date().toISOString(),
+    orders: Array.isArray(record.orders) ? record.orders : [],
+  }
+}
 
 // Helper for localStorage fallback
-const getUsers = () => JSON.parse(localStorage.getItem('siddha_users') || '[]')
-const saveUsers = (u: any[]) => localStorage.setItem('siddha_users', JSON.stringify(u))
+const getUsers = (): LocalUser[] => {
+  try {
+    const raw = localStorage.getItem('siddha_users') || '[]'
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((entry) => normalizeLocalUser(entry))
+      .filter((entry): entry is LocalUser => entry !== null)
+  } catch {
+    return []
+  }
+}
+
+const saveUsers = (u: LocalUser[]) => localStorage.setItem('siddha_users', JSON.stringify(u))
 
 // ── auth exposed API ─────────────────────────────────────────
 export const authService = {
@@ -64,10 +112,10 @@ export const authService = {
 
     // localStorage fallback
     const users = getUsers()
-    if (users.find((u: any) => u.email === params.email)) {
+    if (users.find((u) => u.email === params.email)) {
       return { user: null, error: 'Email already registered' }
     }
-    const newUser = {
+    const newUser: LocalUser = {
       id: Date.now().toString(),
       name: params.name,
       mobile: params.mobile,
@@ -83,19 +131,6 @@ export const authService = {
   },
 
   signIn: async (email: string, password: string): Promise<{ user: AuthUser | null; error: string | null }> => {
-    // Admin shortcut
-    if ((email === ADMIN_EMAIL || email === ADMIN_MOBILE) && password === ADMIN_PASSWORD) {
-      if (isSupabaseConfigured) {
-        // Sign in as admin via Supabase
-        const { data, error } = await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD })
-        if (!error && data.user) {
-          return { user: { id: data.user.id, name: 'Admin', mobile: ADMIN_MOBILE, email: ADMIN_EMAIL, role: 'admin' }, error: null }
-        }
-      }
-      localStorage.setItem('siddha_session', 'admin-id')
-      return { user: { id: 'admin-id', name: 'Admin', mobile: ADMIN_MOBILE, email: ADMIN_EMAIL, role: 'admin' }, error: null }
-    }
-
     // Allow login with mobile number (convert to email)
     const loginEmail = email.includes('@') ? email : email  // pass through, handled below
 
@@ -124,7 +159,7 @@ export const authService = {
 
     // localStorage fallback — support email or mobile login
     const users = getUsers()
-    const match = users.find((u: any) =>
+    const match = users.find((u) =>
       (u.email === loginEmail || u.mobile === loginEmail) && u.password === password
     )
     if (!match) return { user: null, error: 'Invalid credentials' }
@@ -162,11 +197,8 @@ export const authService = {
     // localStorage fallback
     const sid = localStorage.getItem('siddha_session')
     if (!sid) return null
-    if (sid === 'admin-id') {
-      return { id: 'admin-id', name: 'Admin', mobile: ADMIN_MOBILE, email: ADMIN_EMAIL, role: 'admin' }
-    }
     const users = getUsers()
-    const u = users.find((x: any) => x.id === sid)
+    const u = users.find((x) => x.id === sid)
     if (!u) return null
     return { id: u.id, name: u.name, mobile: u.mobile, email: u.email, role: u.role }
   },
@@ -184,7 +216,7 @@ export const authService = {
     const sid = localStorage.getItem('siddha_session')
     if (sid) {
       const users = getUsers()
-      const updated = users.map((u: any) => u.id === sid ? { ...u, ...updates } : u)
+      const updated = users.map((u) => (u.id === sid ? { ...u, ...updates } : u))
       saveUsers(updated)
     }
     return { error: null }

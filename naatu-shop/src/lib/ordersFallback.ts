@@ -1,11 +1,22 @@
+import type { UnitType } from './retail'
+
 export type LocalOrderItem = {
   id?: number | null
+  product_id?: number | null
   name: string
   nameTa?: string | null
+  tamil_name?: string | null
   price: number
   offerPrice?: number | null
   qty: number
+  quantity?: number
+  unit?: string
+  unit_type?: UnitType
+  base_quantity?: number
+  base_price?: number
+  line_total?: number
   image?: string | null
+  image_url?: string | null
 }
 
 export type LocalOrder = {
@@ -53,7 +64,7 @@ export function createLocalOrder(input: {
   const now = new Date()
   const order: LocalOrder = {
     id: `local-${Date.now()}`,
-    invoice_no: `BALA-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+    invoice_no: `INV-${now.getFullYear()}-${Date.now().toString().slice(-6)}`,
     user_id: input.userId || null,
     customer_name: input.customerName,
     phone: input.phone,

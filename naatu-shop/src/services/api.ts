@@ -62,7 +62,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   try {
     response = await fetch(`${API_URL}${path}`, options)
-  } catch (error) {
+  } catch {
     throw new Error('Unable to reach the server. Please check your connection and try again.')
   }
 

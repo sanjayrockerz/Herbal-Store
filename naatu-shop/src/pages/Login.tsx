@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Leaf, Eye, EyeOff } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { authService } from '../services/authService'
@@ -10,7 +10,6 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const isEmail = (value: string) => EMAIL_REGEX.test(value.trim())
 const isPhone = (value: string) => /^\d{10,15}$/.test(value.replace(/\D/g, ''))
 const ADMIN_EMAIL = 'admin@srisiddha.com'
-const LEGACY_ADMIN_PASSWORD = 'admin123'
 
 const toE164Phone = (value: string) => {
   const digits = value.replace(/\D/g, '')
@@ -28,6 +27,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [showPwd, setShowPwd] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+  const searchParams = new URLSearchParams(location.search)
+  const redirectPath = searchParams.get('redirect') || '/'
   const setAuth = useAuthStore((s) => s.setAuth)
 
   const normalizedIdentifier = form.identifier.trim()
@@ -45,7 +47,7 @@ export default function Login() {
     setError('')
   }, [normalizedIdentifier])
 
-  const setSessionUser = async (token: string) => {
+  const setSessionUser = async () => {
     const { data: userData, error: userError } = await supabase.auth.getUser()
     if (userError || !userData.user) throw new Error('Unable to load user session')
 
@@ -55,7 +57,7 @@ export default function Login() {
       .eq('id', userData.user.id)
       .single()
 
-    setAuth(token, {
+    setAuth({
       id: userData.user.id,
       name: profile?.name || userData.user.email || userData.user.phone || 'Customer',
       email: userData.user.email || '',
@@ -65,30 +67,22 @@ export default function Login() {
   }
 
   const signInAdmin = async (password: string) => {
-    const passwords = Array.from(new Set([password, LEGACY_ADMIN_PASSWORD, 'Admin@123'].filter(Boolean)))
-    let lastError = 'Unable to sign in admin account'
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: ADMIN_EMAIL,
+      password,
+    })
 
-    for (const candidatePassword of passwords) {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: ADMIN_EMAIL,
-        password: candidatePassword,
-      })
-
-      if (!signInError && data.session) {
-        await setSessionUser(data.session.access_token)
-        navigate('/admin')
-        return
-      }
-
-      if (signInError) {
-        lastError = signInError.message
-        if (signInError.status === 429) {
-          throw new Error('Too many login attempts. Please wait 1-2 minutes and try again.')
-        }
-      }
+    if (!signInError && data.session) {
+      await setSessionUser()
+      navigate('/admin')
+      return
     }
 
-    throw new Error(lastError || 'Unable to sign in admin account')
+    if (signInError?.status === 429) {
+      throw new Error('Too many login attempts. Please wait 1-2 minutes and try again.')
+    }
+
+    throw new Error(signInError?.message || 'Unable to sign in admin account')
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -103,14 +97,14 @@ export default function Login() {
         if (loginError || !user) {
           throw new Error(loginError || 'Login failed')
         }
-        setAuth('local-session', {
+        setAuth({
           id: user.id,
           name: user.name,
           email: user.email,
           mobile: user.mobile,
           role: user.role,
         })
-        navigate(user.role === 'admin' ? '/dashboard' : '/')
+        navigate(redirectPath)
         return
       }
 
@@ -133,8 +127,8 @@ export default function Login() {
           throw new Error(signInError?.message || 'Login failed')
         }
 
-        await setSessionUser(data.session.access_token)
-        navigate('/')
+        await setSessionUser()
+        navigate(redirectPath)
         return
       }
 
@@ -171,8 +165,8 @@ export default function Login() {
           throw new Error(verifyError?.message || 'OTP verification failed')
         }
 
-        await setSessionUser(data.session.access_token)
-        navigate('/')
+        await setSessionUser()
+        navigate(redirectPath)
         return
       }
 

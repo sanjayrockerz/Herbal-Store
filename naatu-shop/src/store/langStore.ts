@@ -5,7 +5,8 @@ import ta from '../translations/ta.json'
 
 type Lang = 'en' | 'ta'
 
-type Dict = Record<string, string>
+type DictValue = string | { [key: string]: DictValue }
+type Dict = Record<string, DictValue>
 
 interface LangState {
   lang: Lang
@@ -13,23 +14,22 @@ interface LangState {
   t: (key: string) => string
 }
 
-/* Flatten nested JSON into dot-separated keys */
-function flatten(obj: any, prefix = ''): Dict {
-  const result: Dict = {}
-  for (const k in obj) {
-    const key = prefix ? `${prefix}.${k}` : k
-    if (typeof obj[k] === 'object' && obj[k] !== null) {
-      Object.assign(result, flatten(obj[k], key))
-    } else {
-      result[key] = String(obj[k])
-    }
-  }
-  return result
+const dict: Record<Lang, Dict> = {
+  en,
+  ta,
 }
 
-const dict: Record<Lang, Dict> = {
-  en: flatten(en),
-  ta: flatten(ta),
+const getTranslation = (dictionary: Dict, key: string): string | undefined => {
+  const direct = dictionary[key]
+  if (typeof direct === 'string') return direct
+
+  let current: DictValue | undefined = dictionary
+  for (const part of key.split('.')) {
+    if (!current || typeof current === 'string') return undefined
+    current = current[part]
+  }
+
+  return typeof current === 'string' ? current : undefined
 }
 
 export const useLangStore = create<LangState>()(
@@ -37,7 +37,7 @@ export const useLangStore = create<LangState>()(
     (set, get) => ({
       lang: 'en',
       setLang: (lang) => set({ lang }),
-      t: (key) => dict[get().lang]?.[key] || dict.en?.[key] || key,
+      t: (key) => getTranslation(dict[get().lang], key) || getTranslation(dict.en, key) || key,
     }),
     { name: 'srisiddha-lang' },
   ),

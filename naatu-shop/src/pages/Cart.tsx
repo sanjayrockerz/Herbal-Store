@@ -1,17 +1,26 @@
 import { motion } from 'framer-motion'
 import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft } from 'lucide-react'
-import { useCartStore, useAuthStore } from '../store/store'
+import { useCartStore } from '../store/store'
 import { useLangStore } from '../store/langStore'
 import { Link } from 'react-router-dom'
-import { BRAND_EN, BRAND_TA, BRAND_SUBTITLE } from '../lib/brand'
+import { BRAND_EN, BRAND_TA, BRAND_SUBTITLE, BRAND_WHATSAPP } from '../lib/brand'
+import { formatCurrency, formatPricePerUnit, formatQuantityDisplay, getDefaultQuantityForProduct } from '../lib/retail'
 
 export default function Cart() {
   const { items, remove, updateQty, total, count, clear } = useCartStore()
-  const { user } = useAuthStore()
   const { t, lang } = useLangStore()
   const sub = total()
   const shipping = sub === 0 ? 0 : sub >= 500 ? 0 : 50
   const grand = sub + shipping
+
+  const getStep = (item: (typeof items)[number]) => {
+    if (item.unitType === 'unit' || item.unitType === 'bundle') return 1
+    return getDefaultQuantityForProduct({
+      unitType: item.unitType,
+      baseQuantity: item.baseQuantity,
+      predefinedOptions: item.predefinedOptions,
+    })
+  }
 
   return (
     <div className="bg-bgMain min-h-screen">
@@ -57,15 +66,15 @@ export default function Cart() {
                         {lang === 'ta' && item.nameTa ? item.nameTa : item.name}
                       </h3>
                       <p className="text-xs text-sageDark font-bold mt-0.5">{t('cat.' + item.category)}</p>
-                      <p className="text-xs text-gray-400">{t('cart.unit')}: {item.unit}</p>
+                      <p className="text-xs text-gray-400">{formatPricePerUnit(item.basePrice, item.baseQuantity, item.unitLabel, item.unitType)}</p>
                     </div>
                     <div className="flex items-center gap-4 flex-wrap">
                       <div className="flex items-center gap-0.5 border-2 border-sand rounded-xl overflow-hidden bg-white">
-                        <button onClick={() => updateQty(item.id, item.qty - 1)} className="w-9 h-9 flex items-center justify-center text-textMuted hover:bg-bgMain hover:text-textMain transition-colors"><Minus size={14} /></button>
-                        <span className="w-9 text-center font-bold text-sm text-textMain">{item.qty}</span>
-                        <button onClick={() => updateQty(item.id, item.qty + 1)} className="w-9 h-9 flex items-center justify-center text-textMuted hover:bg-bgMain hover:text-textMain transition-colors"><Plus size={14} /></button>
+                        <button onClick={() => updateQty(item.id, item.qty - getStep(item))} className="w-9 h-9 flex items-center justify-center text-textMuted hover:bg-bgMain hover:text-textMain transition-colors"><Minus size={14} /></button>
+                        <span className="min-w-14 px-2 text-center font-bold text-sm text-textMain">{formatQuantityDisplay(item.qty, item.selectedUnit, item.unitType)}</span>
+                        <button onClick={() => updateQty(item.id, item.qty + getStep(item))} className="w-9 h-9 flex items-center justify-center text-textMuted hover:bg-bgMain hover:text-textMain transition-colors"><Plus size={14} /></button>
                       </div>
-                      <span className="text-lg font-bold text-textMain font-headline w-20 text-right">₹{item.price * item.qty}</span>
+                      <span className="text-lg font-bold text-textMain font-headline w-24 text-right">{formatCurrency(item.lineTotal)}</span>
                       <button onClick={() => remove(item.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={15} /></button>
                     </div>
                   </motion.div>
@@ -89,6 +98,7 @@ export default function Cart() {
                 <p className="font-extrabold text-base font-headline text-textMain">{BRAND_EN}</p>
                 <p className="text-[11px] font-semibold text-textMuted">{BRAND_TA}</p>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-sageDark font-bold">{BRAND_SUBTITLE}</p>
+                <p className="text-xs text-textMuted mt-1">Contact: WhatsApp {BRAND_WHATSAPP}</p>
               </div>
               {items.length === 0 ? (
                 <p className="text-center text-gray-400 text-xs py-3">{t('cart.empty')}</p>
@@ -98,20 +108,20 @@ export default function Cart() {
                     const dbName = lang === 'ta' && i.nameTa ? i.nameTa : i.name;
                     return (
                       <div key={i.id} className="flex justify-between mb-1.5 gap-2">
-                        <span className="text-textMain truncate text-xs">{dbName} ×{i.qty}</span>
-                        <span className="font-bold text-textMain text-xs shrink-0">₹{i.price * i.qty}</span>
+                        <span className="text-textMain truncate text-xs">{dbName} ({formatQuantityDisplay(i.qty, i.selectedUnit, i.unitType)})</span>
+                        <span className="font-bold text-textMain text-xs shrink-0">{formatCurrency(i.lineTotal)}</span>
                       </div>
                     )
                   })}
                   <div className="border-t border-dashed border-sand pt-2 mt-2 space-y-1">
-                    <div className="flex justify-between text-xs text-textMuted"><span>{t('cart.subtotal')}</span><span>₹{sub}</span></div>
+                    <div className="flex justify-between text-xs text-textMuted"><span>{t('cart.subtotal')}</span><span>{formatCurrency(sub)}</span></div>
                     <div className="flex justify-between text-xs"><span className="text-textMuted">{t('cart.shipping')}</span>
                       <span className={shipping === 0 && sub > 0 ? 'text-sageDark font-bold' : 'text-textMuted'}>
-                        {sub === 0 ? '–' : shipping === 0 ? t('cart.free') : `₹${shipping}`}
+                        {sub === 0 ? '–' : shipping === 0 ? t('cart.free') : formatCurrency(shipping)}
                       </span>
                     </div>
                     <div className="flex justify-between font-bold text-textMain text-base border-t pt-2">
-                      <span>{t('cart.grand_total')}</span><span>₹{grand}</span>
+                      <span>{t('cart.grand_total')}</span><span>{formatCurrency(grand)}</span>
                     </div>
                   </div>
                 </>
@@ -123,7 +133,7 @@ export default function Cart() {
                 className={`flex items-center justify-center gap-2 font-bold py-3.5 rounded-xl transition-colors text-sm ${
                   items.length ? 'bg-sageDark hover:bg-sageDeep text-white cursor-pointer' : 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
                 }`}>
-                {user ? t('cart.checkout') : t('nav.login')}
+                Proceed to Checkout
               </Link>
             </div>
 

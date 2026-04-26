@@ -5,15 +5,19 @@ import { useLangStore } from '../store/langStore'
 import { Package, User, LogOut, ChevronDown, ChevronUp, ShoppingBag, Settings } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { getLocalOrdersForUser } from '../lib/ordersFallback'
+import { formatCurrency, formatPricePerUnit, formatQuantityDisplay, normalizeStructuredOrderItem } from '../lib/retail'
 
 interface ProfileOrderItem {
-  id?: number | string
-  qty: number
-  price: number
-  offerPrice: number | null
+  product_id: number | null
+  quantity: number
+  unit: string
+  unit_type: 'unit' | 'weight' | 'volume' | 'bundle'
+  base_quantity: number
+  base_price: number
+  line_total: number
   name: string
-  nameTa?: string | null
-  image?: string | null
+  tamil_name?: string | null
+  image_url?: string | null
 }
 
 interface ProfileOrder {
@@ -30,11 +34,16 @@ interface ProfileOrder {
   items: ProfileOrderItem[]
 }
 
-
+const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  pending: { bg: '#FEF3C7', text: '#92400E', label: 'Pending' },
+  processing: { bg: '#DBEAFE', text: '#1E40AF', label: 'Processing' },
+  completed: { bg: '#D1FAE5', text: '#065F46', label: 'Completed' },
+  cancelled: { bg: '#FEE2E2', text: '#991B1B', label: 'Cancelled' },
+}
 
 export default function Profile() {
   const { user, logout } = useAuthStore()
-  const { lang, t } = useLangStore()
+  const { lang } = useLangStore()
   const navigate = useNavigate()
   const [orders, setOrders] = useState<ProfileOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,15 +53,9 @@ export default function Profile() {
   const parseOrderItems = (value: unknown): ProfileOrderItem[] => {
     if (!Array.isArray(value)) return []
 
-    return value.map((item: any) => ({
-      id: item.id,
-      qty: Number(item.qty || item.quantity || 0),
-      price: Number(item.price || 0),
-      offerPrice: item.offerPrice == null ? null : Number(item.offerPrice),
-      name: String(item.name || 'Product'),
-      nameTa: item.nameTa || null,
-      image: item.image || null,
-    }))
+    return value.map((item) => normalizeStructuredOrderItem(
+      item && typeof item === 'object' ? (item as Record<string, unknown>) : {},
+    ))
   }
 
   useEffect(() => {
@@ -87,8 +90,8 @@ export default function Profile() {
           .select('id, invoice_no, customer_name, phone, address, items, subtotal, shipping, total, status, created_at')
           .order('created_at', { ascending: false })
 
-        let ordersData: any[] | null = null
-        let ordersError: any = null
+        let ordersData: Array<Record<string, unknown>> | null = null
+        let ordersError: unknown = null
 
         const linkedOrdersResult = await baseQuery.eq('user_id', authData.user.id)
         ordersData = linkedOrdersResult.data
@@ -110,10 +113,16 @@ export default function Profile() {
         }
 
         const mappedOrders: ProfileOrder[] = ordersData.map((order) => ({
-          ...order,
+          id: String(order.id || ''),
+          invoice_no: String(order.invoice_no || ''),
+          customer_name: String(order.customer_name || ''),
+          phone: String(order.phone || ''),
+          address: String(order.address || ''),
           subtotal: Number(order.subtotal),
           shipping: Number(order.shipping),
           total: Number(order.total),
+          status: String(order.status || 'pending'),
+          created_at: String(order.created_at || new Date().toISOString()),
           items: parseOrderItems(order.items),
         }))
 
@@ -150,7 +159,7 @@ export default function Profile() {
   return (
     <div className="bg-bgMain min-h-screen py-10">
       <div className="max-w-5xl mx-auto px-4">
-        <h1 className="text-3xl font-bold font-headline text-textMain mb-8">{t('profile.title')}</h1>
+        <h1 className="text-3xl font-bold font-headline text-textMain mb-8">My Account</h1>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Sidebar */}
@@ -165,7 +174,7 @@ export default function Profile() {
                 <p className="text-sm text-textMuted">{user.email}</p>
                 {user.mobile && <p className="text-sm text-textMuted">{user.mobile}</p>}
                 <span className={`mt-2 px-3 py-0.5 rounded-full text-xs font-bold ${user.role === 'admin' ? 'bg-sageDark/20 text-sageDark' : 'bg-blue-100 text-blue-700'}`}>
-                  {user.role === 'admin' ? `⚡ ${t('admin.admin_role')}` : `🛒 ${t('admin.cust_role')}`}
+                  {user.role === 'admin' ? '⚡ Admin' : '🛒 Customer'}
                 </span>
               </div>
 
@@ -173,19 +182,19 @@ export default function Profile() {
               <div className="space-y-2">
                 <button onClick={() => setActiveTab('orders')}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-colors ${activeTab === 'orders' ? 'bg-sageDark/10 text-sageDark' : 'text-textMuted hover:bg-bgMain'}`}>
-                  <Package size={16} /> {t('profile.orders')}
+                  <Package size={16} /> Order History
                 </button>
                 <button onClick={() => setActiveTab('info')}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-colors ${activeTab === 'info' ? 'bg-sageDark/10 text-sageDark' : 'text-textMuted hover:bg-bgMain'}`}>
-                  <User size={16} /> {t('profile.info')}
+                  <User size={16} /> Account Info
                 </button>
                 <button onClick={() => navigate('/dashboard')}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm text-textMuted hover:bg-bgMain transition-colors">
-                  <Settings size={16} /> {t('admin.title')}
+                  <Settings size={16} /> Dashboard & Billing
                 </button>
                 <button onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm text-red-500 hover:bg-red-50 transition-colors">
-                  <LogOut size={16} /> {t('nav.logout')}
+                  <LogOut size={16} /> Logout
                 </button>
               </div>
             </div>
@@ -197,14 +206,14 @@ export default function Profile() {
             {activeTab === 'info' && (
               <div className="bg-white p-6 rounded-2xl shadow-soft border border-sand/50">
                 <h2 className="text-xl font-bold text-textMain mb-6 flex items-center gap-2">
-                  <User size={20} className="text-sageDark" /> {t('profile.account_info')}
+                  <User size={20} className="text-sageDark" /> Account Information
                 </h2>
                 <div className="space-y-4">
                   {[
-                    { label: t('profile.labels.name'), value: user.name },
-                    { label: t('profile.labels.email'), value: user.email || '—' },
-                    { label: t('profile.labels.mobile'), value: user.mobile || '—' },
-                    { label: t('profile.labels.role'), value: user.role === 'admin' ? t('admin.admin_role') : t('admin.cust_role') },
+                    { label: 'Full Name', value: user.name },
+                    { label: 'Email', value: user.email || '—' },
+                    { label: 'Mobile', value: user.mobile || '—' },
+                    { label: 'Account Type', value: user.role === 'admin' ? 'Administrator' : 'Customer' },
                   ].map(item => (
                     <div key={item.label} className="flex items-start gap-4 p-4 bg-bgMain rounded-xl">
                       <div>
@@ -226,8 +235,8 @@ export default function Profile() {
             {activeTab === 'orders' && (
               <div className="bg-white p-6 rounded-2xl shadow-soft border border-sand/50">
                 <h2 className="text-xl font-bold text-textMain mb-6 flex items-center gap-2">
-                  <Package size={20} className="text-sageDark" /> {t('profile.orders')}
-                  <span className="ml-auto text-sm font-normal text-textMuted font-bold">{orders.length} {t('profile.orders_count_label')}</span>
+                  <Package size={20} className="text-sageDark" /> Order History
+                  <span className="ml-auto text-sm font-normal text-textMuted">{orders.length} orders</span>
                 </h2>
 
                 {loading ? (
@@ -237,16 +246,17 @@ export default function Profile() {
                 ) : orders.length === 0 ? (
                   <div className="text-center py-16">
                     <ShoppingBag size={48} className="mx-auto text-textMuted opacity-30 mb-4" />
-                    <p className="font-bold text-textMain mb-2">{t('profile.no_orders')}</p>
-                    <p className="text-sm text-textMuted mb-6">{t('profile.start_shopping')}</p>
+                    <p className="font-bold text-textMain mb-2">No orders yet</p>
+                    <p className="text-sm text-textMuted mb-6">Start shopping to see your orders here</p>
                     <Link to="/products"
                       className="inline-block bg-sageDark hover:bg-sageDeep text-white font-bold px-6 py-3 rounded-xl transition-colors">
-                      {t('profile.browse_products')}
+                      Browse Products
                     </Link>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {orders.map((o) => {
+                      const statusInfo = STATUS_COLORS[o.status] || STATUS_COLORS.pending
                       const isExpanded = expanded === o.id
                       return (
                         <div key={o.id} className="border border-sand rounded-xl overflow-hidden">
@@ -257,11 +267,14 @@ export default function Profile() {
                             <div>
                               <p className="font-bold text-sm text-textMain">{o.invoice_no}</p>
                               <p className="text-xs text-textMuted mt-0.5">
-                                {new Date(o.created_at).toLocaleDateString('en-GB')} · {o.items?.length || 0} {t('profile.items_label')}
+                                {new Date(o.created_at).toLocaleDateString('en-GB')} · {o.items?.length || 0} items
                               </p>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="font-bold text-textMain uppercase tracking-tight">₹{o.total}</span>
+                              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: statusInfo.bg, color: statusInfo.text }}>
+                                {statusInfo.label}
+                              </span>
+                              <span className="font-bold text-textMain">₹{o.total}</span>
                               {isExpanded ? <ChevronUp size={16} className="text-textMuted" /> : <ChevronDown size={16} className="text-textMuted" />}
                             </div>
                           </div>
@@ -270,12 +283,12 @@ export default function Profile() {
                             <div className="border-t border-sand bg-white p-4">
                               <div className="mb-4 pb-4 border-b border-sand/50 text-sm grid grid-cols-2 gap-3">
                                 <div>
-                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">{t('profile.labels.customer')}</p>
+                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">Customer</p>
                                   <p className="font-medium text-textMain">{o.customer_name}</p>
                                   <p className="text-textMuted">{o.phone}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">{t('profile.labels.address')}</p>
+                                  <p className="text-xs text-textMuted font-bold uppercase mb-1">Address</p>
                                   <p className="text-textMuted">{o.address}</p>
                                 </div>
                               </div>
@@ -289,24 +302,31 @@ export default function Profile() {
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-sand/30">
-                                  {(o.items || []).map((item: any, i: number) => {
-                                    const pName = lang === 'ta' && item.nameTa ? item.nameTa : item.name
-                                    const effPrice = item.offerPrice || item.price
+                                  {(o.items || []).map((item, i: number) => {
+                                      const pName = lang === 'ta' && item.tamil_name ? item.tamil_name : item.name
                                     return (
                                       <tr key={i}>
                                         <td className="py-2 font-medium text-textMain">{pName}</td>
-                                        <td className="py-2 text-center text-textMuted">{item.qty}</td>
-                                        <td className="py-2 text-right font-bold text-textMain">₹{effPrice * item.qty}</td>
+                                          <td className="py-2 text-center text-textMuted">{formatQuantityDisplay(item.quantity, item.unit, item.unit_type)}</td>
+                                          <td className="py-2 text-right font-bold text-textMain">{formatCurrency(item.line_total)}</td>
                                       </tr>
                                     )
                                   })}
                                 </tbody>
                               </table>
 
+                              <div className="mt-3 space-y-1">
+                                {(o.items || []).map((item, i: number) => (
+                                  <p key={`meta-${i}`} className="text-[11px] text-textMuted">
+                                    {(lang === 'ta' && item.tamil_name ? item.tamil_name : item.name)}: {formatPricePerUnit(item.base_price, item.base_quantity, item.unit, item.unit_type)}
+                                  </p>
+                                ))}
+                              </div>
+
                               <div className="mt-4 pt-4 border-t border-sand text-sm space-y-1 text-right">
-                                <p className="text-textMuted">Subtotal: ₹{o.subtotal}</p>
-                                <p className="text-textMuted">Shipping: {o.shipping === 0 ? 'FREE' : `₹${o.shipping}`}</p>
-                                <p className="font-bold text-textMain text-base">Total: ₹{o.total}</p>
+                                  <p className="text-textMuted">Subtotal: {formatCurrency(o.subtotal)}</p>
+                                  <p className="text-textMuted">Shipping: {o.shipping === 0 ? 'FREE' : formatCurrency(o.shipping)}</p>
+                                  <p className="font-bold text-textMain text-base">Total: {formatCurrency(o.total)}</p>
                               </div>
                             </div>
                           )}

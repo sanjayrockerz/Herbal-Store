@@ -21,7 +21,8 @@ import { BRAND_EN } from './lib/brand'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated())
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
+  const location = useLocation()
+  return isAuthenticated ? <>{children}</> : <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />
 }
 
 function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
@@ -68,9 +69,9 @@ function AppShell() {
   }, [fetchProducts])
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen print:block print:min-h-0">
       {!isAuthPage && <div className="print-hidden"><Navbar /></div>}
-      <main className="flex-grow">
+      <main className="flex-grow print:block">
         <Routes>
           <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
           <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
@@ -98,11 +99,7 @@ function AppShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="flex flex-col min-h-screen">
-        <main className="flex-grow">
-          <AppShell />
-        </main>
-      </div>
+      <AppShell />
     </BrowserRouter>
   )
 }

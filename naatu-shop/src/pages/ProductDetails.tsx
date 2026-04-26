@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useCartStore, useProductStore, type Product } from '../store/store'
 import { useLangStore } from '../store/langStore'
 import { ShoppingCart } from 'lucide-react'
+import { formatPricePerUnit } from '../lib/retail'
 
 export default function ProductDetails() {
   const { id } = useParams()
@@ -106,25 +107,19 @@ export default function ProductDetails() {
                     <span className="text-3xl font-bold font-headline text-textMain">₹{product.price}</span>
                   )}
                 </div>
+                <p className="text-xs text-sageDark font-bold mt-2">{formatPricePerUnit(product.offerPrice || product.price, product.baseQuantity, product.unitLabel, product.unitType)}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm font-bold text-textMuted mb-1">Availability</p>
-                <p className={`font-bold ${product.stock > 0 ? 'text-sageDark' : 'text-red-500'}`}>
-                  {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
-                </p>
+                <p className="font-bold text-sageDark">Always available</p>
               </div>
             </div>
 
             <button
-              onClick={() => product.stock > 0 && add(product)}
-              disabled={product.stock === 0}
-              className={`w-full flex items-center justify-center gap-2 font-bold py-4 rounded-xl transition-colors ${
-                product.stock > 0 
-                  ? 'bg-sageDark hover:bg-sageDeep text-white' 
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
+              onClick={() => add(product)}
+              className="w-full flex items-center justify-center gap-2 font-bold py-4 rounded-xl transition-colors bg-sageDark hover:bg-sageDeep text-white"
             >
-              <ShoppingCart size={18} /> {product.stock === 0 ? 'Sold Out' : 'Add to Cart'}
+              <ShoppingCart size={18} /> Add to Cart
             </button>
           </div>
         </div>

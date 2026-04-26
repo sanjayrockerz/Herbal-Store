@@ -3,6 +3,7 @@ import { Heart, ShoppingCart, Star } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useCartStore, useFavStore, type Product } from '../store/store'
 import { useLangStore } from '../store/langStore'
+import { formatPricePerUnit } from '../lib/retail'
 
 export default function ProductCard({ product }: { product: Product }) {
   const add = useCartStore((s) => s.add)
@@ -13,6 +14,7 @@ export default function ProductCard({ product }: { product: Product }) {
   const displayName = lang === 'ta' && product.nameTa ? product.nameTa : product.name
   const displayBenefits = lang === 'ta' && product.benefitsTa ? product.benefitsTa : product.benefits
   const salePrice = product.offerPrice && product.offerPrice < product.price ? product.offerPrice : null
+  const effectivePrice = salePrice || product.price
   const discount = salePrice ? Math.round(((product.price - salePrice) / product.price) * 100) : 0
 
   return (
@@ -22,11 +24,7 @@ export default function ProductCard({ product }: { product: Product }) {
       transition={{ duration: 0.18 }}
       className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-sand/60 bg-white shadow-sm transition-shadow hover:shadow-md"
     >
-      {product.stock <= 15 ? (
-        <div className="absolute left-2 top-2 z-10 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-          {product.stock === 0 ? t('card.out_of_stock') : t('card.low_stock')}
-        </div>
-      ) : null}
+
 
       <motion.button
         whileTap={{ scale: 0.9 }}
@@ -63,7 +61,7 @@ export default function ProductCard({ product }: { product: Product }) {
         <div className="flex items-center gap-1 text-[11px] text-slate-500">
           <Star size={11} className="fill-amber-400 text-amber-400" />
           <span className="font-semibold text-slate-700">{product.rating.toFixed(1)}</span>
-          <span>· {product.unit}</span>
+          <span>· {formatPricePerUnit(effectivePrice, product.baseQuantity, product.unitLabel, product.unitType)}</span>
         </div>
 
         <div className="mt-auto flex items-end justify-between border-t border-sand/60 pt-2">
@@ -82,12 +80,11 @@ export default function ProductCard({ product }: { product: Product }) {
           </div>
           <motion.button
             whileTap={{ scale: 0.92 }}
-            onClick={() => product.stock > 0 && add(product)}
-            disabled={product.stock === 0}
-            className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold ${product.stock === 0 ? 'cursor-not-allowed bg-slate-200 text-slate-400' : 'bg-sageDark text-white hover:bg-[#5f8b73]'}`}
+            onClick={() => add(product)}
+            className="rounded-md px-2.5 py-1.5 text-[11px] font-bold bg-sageDark text-white hover:bg-[#5f8b73]"
             type="button"
           >
-            <span className="inline-flex items-center gap-1"><ShoppingCart size={12} /> {product.stock === 0 ? t('card.sold_out') : t('card.add')}</span>
+            <span className="inline-flex items-center gap-1"><ShoppingCart size={12} /> {t('card.add')}</span>
           </motion.button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Leaf, Eye, EyeOff, CheckCircle } from 'lucide-react'
 import { authService } from '../services/authService'
 import { useAuthStore } from '../store/store'
@@ -15,6 +15,9 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [showPwd, setShowPwd] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+  const searchParams = new URLSearchParams(location.search)
+  const redirectPath = searchParams.get('redirect') || '/'
   const setAuth = useAuthStore((s) => s.setAuth)
 
   const handleSubmit = async (e: FormEvent) => {
@@ -59,7 +62,7 @@ export default function Register() {
     setError('')
     setLoading(true)
 
-    const { error: vError } = await (authService as any).verifyOtp(form.email, otp)
+    const { error: vError } = await authService.verifyOtp(form.email, otp)
     setLoading(false)
 
     if (vError) {
@@ -71,8 +74,8 @@ export default function Register() {
     await new Promise(r => setTimeout(r, 500))
     const user = await authService.getCurrentUser()
     if (user) {
-      setAuth(user.id, user)
-      navigate('/')
+      setAuth(user)
+      navigate(redirectPath)
     } else {
       navigate('/login')
     }

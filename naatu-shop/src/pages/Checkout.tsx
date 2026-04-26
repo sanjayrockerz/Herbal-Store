@@ -2,10 +2,15 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useCartStore, useAuthStore } from '../store/store'
 import { useLangStore } from '../store/langStore'
-import { ArrowLeft, Printer, CheckCircle, ShoppingBag } from 'lucide-react'
-import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { createLocalOrder } from '../lib/ordersFallback'
-import { Invoice } from '../components/Invoice'
+import { ArrowLeft, MessageCircle, Printer, CheckCircle, ShoppingBag } from 'lucide-react'
+import { createOrderWithStock } from '../services/orderService'
+import { BRAND_EN, BRAND_TA, BRAND_SUBTITLE, BRAND_WHATSAPP } from '../lib/brand'
+import {
+  buildStructuredOrderItem,
+  formatCurrency,
+  formatPricePerUnit,
+  formatQuantityDisplay,
+} from '../lib/retail'
 
 interface BookedOrderSnapshot {
   invoiceNo: string
@@ -19,8 +24,11 @@ interface BookedOrderSnapshot {
   address: string
 }
 
-// WHATSAPP_NUM imported from brand.ts
-const isUuid = (value: unknown) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+const WHATSAPP_RECIPIENT = '918610632662'
+const toNumericProductId = (value: string | number): number | null => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 export default function Checkout() {
   const { items, clear, total } = useCartStore()
@@ -61,83 +69,32 @@ export default function Checkout() {
     setLoading(true)
     setError('')
 
+    const structuredItems = items.map((item) => buildStructuredOrderItem({
+      productId: toNumericProductId(item.id),
+      name: item.name,
+      tamilName: item.tamilName || item.nameTa || null,
+      quantity: item.qty,
+      unit: item.selectedUnit,
+      unitType: item.unitType,
+      baseQuantity: item.baseQuantity,
+      basePrice: item.basePrice,
+      imageUrl: item.imageUrl || item.image || null,
+    }))
+
     try {
-      if (!isSupabaseConfigured) {
-        const local = createLocalOrder({
-          userId: user?.id || null,
-          customerName: form.name.trim(),
-          phone: form.phone.trim(),
-          address: form.address.trim(),
-          items: items.map((item) => ({
-            id: item.id,
-            name: item.name,
-            nameTa: item.nameTa || null,
-            price: item.price,
-            offerPrice: item.offerPrice || null,
-            qty: item.qty,
-            image: item.image,
-          })),
-          subtotal: sub,
-          shipping,
-          total: grand,
-        })
-
-        const bookedSnapshot: BookedOrderSnapshot = {
-          invoiceNo: local.invoice_no,
-          orderId: local.id,
-          items: [...items],
-          subtotal: sub,
-          shipping,
-          total: grand,
-          name: form.name.trim(),
-          phone: form.phone.trim(),
-          address: form.address.trim(),
-        }
-
-        clear()
-        setBooked(bookedSnapshot)
-        return
-      }
-
-      const { data: userData } = await supabase.auth.getUser()
-      const userIdRaw = userData.user?.id
-      const userId = isUuid(userIdRaw) ? userIdRaw : null
-      const fallbackInvoice = `INV-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`
-      const invoiceNo = fallbackInvoice
-
-      const { data: insertedOrder, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          invoice_no: invoiceNo,
-          user_id: userId,
-          customer_name: form.name.trim(),
-          phone: form.phone.trim(),
-          address: form.address.trim(),
-          items: items.map((item) => ({
-            id: item.id,
-            name: item.name,
-            nameTa: item.nameTa || null,
-            price: item.price,
-            offerPrice: item.offerPrice || null,
-            qty: item.qty,
-            image: item.image,
-          })),
-          subtotal: sub,
-          shipping,
-          total: grand,
-          status: 'pending',
-        })
-        .select('id, invoice_no, items')
-        .single()
-
-      if (orderError || !insertedOrder) {
-        throw new Error(orderError?.message || 'Failed to create order')
-      }
+      const created = await createOrderWithStock({
+        customerName: form.name.trim(),
+        phone: form.phone.trim(),
+        address: form.address.trim(),
+        items: structuredItems,
+        shipping,
+        status: 'pending',
+      })
 
       const itemsSnapshot = [...items]
       const bookedSnapshot: BookedOrderSnapshot = {
-        invoiceNo: insertedOrder.invoice_no,
-        orderId: insertedOrder.id,
+        invoiceNo: created.invoiceNo,
+        orderId: created.orderId,
         items: itemsSnapshot,
         subtotal: sub,
         shipping,
@@ -156,6 +113,22 @@ export default function Checkout() {
     }
   }
 
+  const sendToWhatsApp = () => {
+    if (!booked) return
+    const text = encodeURIComponent(
+      `🌿 *${BRAND_EN}* — New Booking\n\n` +
+      `*Invoice:* ${booked.invoiceNo}\n` +
+      `*Name:* ${booked.name}\n` +
+      `*Phone:* ${booked.phone}\n` +
+      `*Address:* ${booked.address}\n\n` +
+      booked.items.map(i => {
+        const pName = lang === 'ta' && i.nameTa ? i.nameTa : i.name
+        return `• ${pName} (${formatQuantityDisplay(i.qty, i.selectedUnit, i.unitType)}) = ${formatCurrency(i.lineTotal)}`
+      }).join('\n') +
+      `\n\n*Subtotal:* ${formatCurrency(booked.subtotal)}\n*Shipping:* ${booked.shipping === 0 ? 'FREE' : formatCurrency(booked.shipping)}\n*Grand Total: ${formatCurrency(booked.total)}*\n\nThank you! | இங்கு வாங்கியதற்கு நன்றி!`
+    )
+    window.open(`https://wa.me/${WHATSAPP_RECIPIENT}?text=${text}`, '_blank')
+  }
 
   // ── Order Confirmed screen ─────────────────────────────────
   if (booked) {
@@ -173,22 +146,72 @@ export default function Checkout() {
           </div>
 
           {/* Invoice */}
-          <div className="mb-10">
-            <Invoice
-              invoiceNo={booked.invoiceNo}
-              date={new Date().toISOString()}
-              customerName={booked.name}
-              phone={booked.phone}
-              address={booked.address}
-              items={booked.items}
-              subtotal={booked.subtotal}
-              shipping={booked.shipping}
-              total={booked.total}
-            />
+          <div className="print-receipt mx-auto max-w-[430px] bg-white p-6 rounded-2xl shadow-soft border border-sand/50 mb-6 print:shadow-none print:border-none print:m-0 print:p-0">
+            <div className="text-center mb-6 pb-6 border-b border-sand">
+              <h2 className="text-2xl font-bold font-headline text-sageDeep">{BRAND_EN}</h2>
+              <p className="text-sm text-textMuted">{BRAND_TA}</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-sageDark font-bold mt-1">{BRAND_SUBTITLE}</p>
+              <div className="mt-4 flex justify-between text-xs text-left">
+                <div>
+                  <p><span className="font-bold">Invoice No:</span> {booked.invoiceNo}</p>
+                  <p><span className="font-bold">Date:</span> {new Date().toLocaleDateString('en-GB')}</p>
+                  <p><span className="font-bold">Status:</span> <span className="text-amber-600 font-bold">Pending</span></p>
+                </div>
+                <div className="text-right">
+                  <p><span className="font-bold">Bill To:</span> {booked.name}</p>
+                  <p>{booked.phone}</p>
+                  <p className="max-w-[180px] text-right">{booked.address}</p>
+                </div>
+              </div>
+            </div>
+
+            <table className="w-full text-sm mb-6 pb-6 border-b border-sand">
+              <thead className="text-left text-textMuted border-b border-sand">
+                <tr>
+                  <th className="pb-2 font-medium">#</th>
+                  <th className="pb-2 font-medium">Product</th>
+                  <th className="pb-2 text-center font-medium">Qty</th>
+                  <th className="pb-2 text-right font-medium">Unit</th>
+                  <th className="pb-2 text-right font-medium">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-sand/30">
+                {booked.items.map((item, i) => {
+                  const pName = lang === 'ta' && item.nameTa ? item.nameTa : item.name
+                  return (
+                    <tr key={item.id}>
+                      <td className="py-2 text-textMuted">{i + 1}</td>
+                      <td className="py-2 font-medium">
+                        {pName}
+                        <p className="text-[11px] text-textMuted">{formatPricePerUnit(item.basePrice, item.baseQuantity, item.unitLabel, item.unitType)}</p>
+                      </td>
+                      <td className="py-2 text-center">{formatQuantityDisplay(item.qty, item.selectedUnit, item.unitType)}</td>
+                      <td className="py-2 text-right text-textMuted">{formatCurrency(item.basePrice)}</td>
+                      <td className="py-2 text-right font-bold">{formatCurrency(item.lineTotal)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            <div className="space-y-1.5 text-sm text-right">
+              <p className="text-textMuted">Subtotal: <span className="font-medium text-textMain">{formatCurrency(booked.subtotal)}</span></p>
+              <p className="text-textMuted">Shipping: <span className="font-medium text-textMain">{booked.shipping === 0 ? 'FREE 🎉' : formatCurrency(booked.shipping)}</span></p>
+              <p className="text-lg font-bold font-headline mt-3 border-t border-sand pt-3">Grand Total: {formatCurrency(booked.total)}</p>
+            </div>
+
+            <div className="mt-8 pt-5 border-t border-sand text-center text-xs text-textMuted">
+              <p className="font-bold">Thank you for shopping with us! | இங்கு வாங்கியதற்கு நன்றி!</p>
+              <p className="mt-1">Contact: WhatsApp {BRAND_WHATSAPP}</p>
+            </div>
           </div>
 
           {/* Actions */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 print:hidden">
+            <button onClick={sendToWhatsApp}
+              className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-xl transition-colors">
+              <MessageCircle size={18} /> WhatsApp
+            </button>
             <button onClick={() => window.print()}
               className="flex items-center justify-center gap-2 border-2 border-sand hover:border-sageDark text-textMain font-bold py-3.5 rounded-xl transition-colors">
               <Printer size={18} /> Print Bill
@@ -257,7 +280,7 @@ export default function Checkout() {
                 {loading ? (
                   <><span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Placing Order...</>
                 ) : (
-                  <><ShoppingBag size={18} /> Confirm Booking — ₹{grand}</>
+                  <><ShoppingBag size={18} /> Confirm Booking — {formatCurrency(grand)}</>
                 )}
               </button>
             </div>
@@ -269,7 +292,6 @@ export default function Checkout() {
             <div className="space-y-4 divide-y divide-sand/30">
               {items.map(item => {
                 const pName = lang === 'ta' && item.nameTa ? item.nameTa : item.name
-                const effPrice = item.offerPrice || item.price
                 return (
                   <div key={item.id} className="flex items-center gap-3 pt-4 first:pt-0">
                     <div className="w-14 h-14 rounded-xl overflow-hidden bg-sand/20 shrink-0">
@@ -279,9 +301,9 @@ export default function Checkout() {
                     </div>
                     <div className="flex-grow">
                       <p className="font-bold text-sm text-textMain">{pName}</p>
-                      <p className="text-xs text-textMuted">×{item.qty}</p>
+                      <p className="text-xs text-textMuted">{formatQuantityDisplay(item.qty, item.selectedUnit, item.unitType)}</p>
                     </div>
-                    <p className="font-bold text-sm text-textMain">₹{effPrice * item.qty}</p>
+                    <p className="font-bold text-sm text-textMain">{formatCurrency(item.lineTotal)}</p>
                   </div>
                 )
               })}
@@ -289,16 +311,16 @@ export default function Checkout() {
 
             <div className="mt-6 pt-5 border-t border-sand space-y-2 text-sm">
               <div className="flex justify-between text-textMuted">
-                <span>Subtotal</span><span>₹{sub}</span>
+                <span>Subtotal</span><span>{formatCurrency(sub)}</span>
               </div>
               <div className="flex justify-between text-textMuted">
                 <span>Shipping</span>
                 <span className={shipping === 0 && sub > 0 ? 'text-green-600 font-bold' : ''}>
-                  {sub === 0 ? '–' : shipping === 0 ? 'FREE 🎉' : `₹${shipping}`}
+                  {sub === 0 ? '–' : shipping === 0 ? 'FREE 🎉' : formatCurrency(shipping)}
                 </span>
               </div>
               <div className="flex justify-between font-bold text-textMain text-base border-t border-sand pt-3 mt-3">
-                <span>Grand Total</span><span>₹{grand}</span>
+                <span>Grand Total</span><span>{formatCurrency(grand)}</span>
               </div>
             </div>
           </div>

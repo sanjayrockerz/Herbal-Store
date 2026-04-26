@@ -1,10 +1,81 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Search, SlidersHorizontal, Filter, Tag, CheckCircle2, Layout } from 'lucide-react'
+import { Search, SlidersHorizontal, Filter, CheckCircle2 } from 'lucide-react'
 import ProductCard from '../components/ProductCard'
 import { useLangStore } from '../store/langStore'
 import { useProductStore } from '../store/store'
+
+type FilterSideBlockProps = {
+  t: (key: string) => string
+  categories: string[]
+  activeCategory: string
+  setActiveCategory: Dispatch<SetStateAction<string>>
+  healthConcerns: string[]
+  activeRem: string[]
+  setActiveRem: Dispatch<SetStateAction<string[]>>
+  toggle: (arr: string[], setArr: (value: string[]) => void, val: string) => void
+}
+
+function FilterSideBlock({
+  t,
+  categories,
+  activeCategory,
+  setActiveCategory,
+  healthConcerns,
+  activeRem,
+  setActiveRem,
+  toggle,
+}: FilterSideBlockProps) {
+  return (
+    <div className="space-y-10">
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+           <div className="w-1 h-4 bg-sageDark rounded-full"></div>
+           <h3 className="text-[13px] font-black text-textMain uppercase tracking-wider">
+              {t('cat.explore_title') || t('admin.category')}
+           </h3>
+        </div>
+        <div className="space-y-1">
+           {categories.map(cat => (
+             <button
+               key={cat}
+               onClick={() => setActiveCategory(cat)}
+               className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-between group ${activeCategory === cat ? 'bg-sageDark text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-sageDark'}`}
+             >
+              <span>{cat === 'All' ? t('cat.view_all') : (t('cat.' + cat) || cat)}</span>
+              <div className={`w-1.5 h-1.5 rounded-full transition-all ${activeCategory === cat ? 'bg-white' : 'bg-transparent group-hover:bg-sage/40'}`}></div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+           <div className="w-1 h-4 bg-purple-400 rounded-full"></div>
+           <h3 className="text-[13px] font-black text-textMain uppercase tracking-wider">
+              {t('remedy.title')}
+           </h3>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {healthConcerns.map(rem => (
+            <label key={rem} className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-colors border ${activeRem.includes(rem) ? 'bg-purple-50 border-purple-100' : 'border-transparent hover:bg-gray-50'}`}>
+              <input
+                type="checkbox"
+                checked={activeRem.includes(rem)}
+                onChange={() => toggle(activeRem, setActiveRem, rem)}
+                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              <span className={`text-[13px] font-bold transition-colors ${activeRem.includes(rem) ? 'text-purple-700' : 'text-gray-500'}`}>
+                {t('remedy.' + rem) || rem}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Products() {
   const [params] = useSearchParams()
@@ -20,20 +91,14 @@ export default function Products() {
     void fetchProducts()
   }, [fetchProducts])
 
-  useEffect(() => {
-    setSearch(params.get('search') || '')
-    setActiveCategory(params.get('cat') || 'All')
-    setActiveRem(params.get('remedy') ? [params.get('remedy')!] : [])
-  }, [params])
-
   // Dynamically derive categories and remedies from actual product data
   const categories = useMemo(() => {
-    const live = Array.from(new Set(products.map(p => p.category))).filter(Boolean)
+    const live = Array.from(new Set(products.filter((p) => p.isActive).map(p => p.category))).filter(Boolean)
     return ['All', ...live]
   }, [products])
 
   const healthConcerns = useMemo(() => {
-    const live = Array.from(new Set(products.flatMap(p => p.remedy || []))).filter(Boolean)
+    const live = Array.from(new Set(products.filter((p) => p.isActive).flatMap(p => p.remedy || []))).filter(Boolean)
     return live
   }, [products])
 
@@ -49,7 +114,7 @@ export default function Products() {
   }
 
   const filtered = useMemo(() => {
-    let out = [...products]
+    let out = products.filter((p) => p.isActive)
 
     if (search) {
       const q = search.toLowerCase()
@@ -76,48 +141,6 @@ export default function Products() {
     return out
   }, [products, search, activeCategory, activeRem, sort])
 
-  const FilterSideBlock = () => (
-    <div className="space-y-8">
-      <div>
-        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-           <Layout size={14}/> {t('admin.category')}
-        </h3>
-        <div className="space-y-2">
-           {categories.map(cat => (
-             <button
-               key={cat}
-               onClick={() => setActiveCategory(cat)}
-               className={`w-full text-left px-3 py-2 rounded-lg text-sm font-bold transition-all ${activeCategory === cat ? 'bg-sageDark text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-             >
-               {cat === 'All' ? 'All' : t('cat.' + cat)}
-             </button>
-           ))}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-           <Tag size={14}/> {t('remedy.title')}
-        </h3>
-        <div className="flex flex-col gap-2">
-          {healthConcerns.map(rem => (
-            <label key={rem} className="flex items-center gap-3 group cursor-pointer p-1">
-              <input 
-                type="checkbox" 
-                checked={activeRem.includes(rem)} 
-                onChange={() => toggle(activeRem, setActiveRem, rem)} 
-                className="w-4 h-4 rounded border-gray-300 text-sageDark focus:ring-sage" 
-              />
-              <span className={`text-sm font-medium transition-colors ${activeRem.includes(rem) ? 'text-sageDark font-bold' : 'text-gray-500 group-hover:text-gray-900'}`}>
-                {t('remedy.' + rem) || rem}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-
   return (
     <div className="bg-[#f8f9fa] min-h-screen">
       {/* Header Panel */}
@@ -138,7 +161,16 @@ export default function Products() {
                    <button onClick={clear} className="text-xs font-bold text-red-500 hover:underline">{t('products.clear')}</button>
                  )}
               </div>
-              <FilterSideBlock />
+              <FilterSideBlock
+                t={t}
+                categories={categories}
+                activeCategory={activeCategory}
+                setActiveCategory={setActiveCategory}
+                healthConcerns={healthConcerns}
+                activeRem={activeRem}
+                setActiveRem={setActiveRem}
+                toggle={toggle}
+              />
            </div>
         </aside>
 
@@ -176,7 +208,16 @@ export default function Products() {
             {showFilters && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="lg:hidden mb-6 overflow-hidden">
                  <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-md">
-                   <FilterSideBlock />
+                   <FilterSideBlock
+                     t={t}
+                     categories={categories}
+                     activeCategory={activeCategory}
+                     setActiveCategory={setActiveCategory}
+                     healthConcerns={healthConcerns}
+                     activeRem={activeRem}
+                     setActiveRem={setActiveRem}
+                     toggle={toggle}
+                   />
                  </div>
               </motion.div>
             )}

@@ -1,11 +1,20 @@
 import React from 'react'
 import { BRAND_EN, BRAND_TA, BRAND_SUBTITLE, BRAND_WHATSAPP } from '../lib/brand'
+import { formatCurrency, formatPricePerUnit, formatQuantityDisplay, normalizeStructuredOrderItem } from '../lib/retail'
 
 export interface InvoiceItem {
   id?: number | string
+  product_id?: number | null
   name: string
   nameTa?: string | null
+  tamil_name?: string | null
   qty: number
+  quantity?: number
+  unit?: string
+  unit_type?: 'unit' | 'weight' | 'volume' | 'bundle'
+  base_quantity?: number
+  base_price?: number
+  line_total?: number
   price: number
   offerPrice?: number | null
 }
@@ -125,20 +134,24 @@ export const Invoice: React.FC<InvoiceProps> = ({
           </thead>
           <tbody>
             {items.map((item, idx) => {
-              const unitPrice = item.offerPrice || item.price
+              const normalized = normalizeStructuredOrderItem(item as unknown as Record<string, unknown>)
+              const displayName = normalized.tamil_name || item.nameTa || normalized.name
               return (
                 <tr key={idx} style={{ borderBottom: '1px solid #f0f0f0' }}>
                   <td style={{ padding: '12px', fontSize: 12, color: '#999', verticalAlign: 'top' }}>{idx + 1}</td>
                   <td style={{ padding: '12px', verticalAlign: 'top' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a2e' }}>{item.name}</div>
-                    {item.nameTa && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{item.nameTa}</div>}
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a2e' }}>{normalized.name}</div>
+                    {displayName && displayName !== normalized.name && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{displayName}</div>}
                     {item.offerPrice && item.price !== item.offerPrice && (
                       <div style={{ fontSize: 10, color: '#aaa', textDecoration: 'line-through', marginTop: 2 }}>MRP ₹{item.price}</div>
                     )}
+                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>
+                      {formatPricePerUnit(normalized.base_price, normalized.base_quantity, normalized.unit, normalized.unit_type)}
+                    </div>
                   </td>
-                  <td style={{ padding: '12px', fontSize: 13, fontWeight: 600, textAlign: 'center', verticalAlign: 'top' }}>{item.qty}</td>
-                  <td style={{ padding: '12px', fontSize: 13, fontWeight: 600, textAlign: 'right', verticalAlign: 'top', color: '#555' }}>₹{unitPrice}</td>
-                  <td style={{ padding: '12px', fontSize: 14, fontWeight: 800, textAlign: 'right', verticalAlign: 'top', color: '#1a1a2e' }}>₹{unitPrice * item.qty}</td>
+                  <td style={{ padding: '12px', fontSize: 13, fontWeight: 600, textAlign: 'center', verticalAlign: 'top' }}>{formatQuantityDisplay(normalized.quantity, normalized.unit, normalized.unit_type)}</td>
+                  <td style={{ padding: '12px', fontSize: 13, fontWeight: 600, textAlign: 'right', verticalAlign: 'top', color: '#555' }}>{formatCurrency(normalized.base_price)}</td>
+                  <td style={{ padding: '12px', fontSize: 14, fontWeight: 800, textAlign: 'right', verticalAlign: 'top', color: '#1a1a2e' }}>{formatCurrency(normalized.line_total)}</td>
                 </tr>
               )
             })}
@@ -152,12 +165,12 @@ export const Invoice: React.FC<InvoiceProps> = ({
           <div style={{ minWidth: 240 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: 13, color: '#666' }}>Subtotal</span>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>₹{subtotal}</span>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{formatCurrency(subtotal)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontSize: 13, color: '#666' }}>Shipping</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: shipping === 0 ? '#16a34a' : '#1a1a2e' }}>
-                {shipping === 0 ? 'FREE' : `₹${shipping}`}
+                {shipping === 0 ? 'FREE' : formatCurrency(shipping)}
               </span>
             </div>
             <div
@@ -167,7 +180,7 @@ export const Invoice: React.FC<InvoiceProps> = ({
               }}
             >
               <span style={{ fontSize: 16, fontWeight: 900, color: '#2d5a27', textTransform: 'uppercase', letterSpacing: 0.5 }}>Grand Total</span>
-              <span style={{ fontSize: 22, fontWeight: 900, color: '#2d5a27' }}>₹{total}</span>
+              <span style={{ fontSize: 22, fontWeight: 900, color: '#2d5a27' }}>{formatCurrency(total)}</span>
             </div>
           </div>
         </div>
@@ -195,41 +208,3 @@ export const Invoice: React.FC<InvoiceProps> = ({
   )
 }
 
-// ── WhatsApp text formatter ────────────────────────────────────────────
-export const generateWhatsAppText = (data: InvoiceProps) => {
-  const line = '━━━━━━━━━━━━━━━━━━━━━━'
-  let itemsText = ''
-  data.items.forEach((item, i) => {
-    const price = item.offerPrice || item.price
-    itemsText += `${i + 1}. *${item.name}*\n`
-    itemsText += `   ${item.qty} × ₹${price} = *₹${item.qty * price}*\n`
-  })
-
-  return `🌿 *${BRAND_EN.toUpperCase()}*
-${BRAND_SUBTITLE}
-
-📌 *BILL DETAILS*
-Invoice: #${data.invoiceNo}
-Date: ${new Date(data.date).toLocaleDateString('en-GB')}
-Status: ${data.status || 'Pending'}
-
-👤 *CUSTOMER*
-Name: ${data.customerName}
-Phone: ${data.phone}
-Addr: ${data.address}
-
-${line}
-*ITEMS ORDERED:*
-${itemsText}
-${line}
-
-💰 *SUMMARY*
-Subtotal: ₹${data.subtotal}
-Shipping: ${data.shipping === 0 ? 'FREE' : `₹${data.shipping}`}
-*GRAND TOTAL: ₹${data.total}*
-
-${line}
-🙏 _Thank you for choosing us!_
-_இங்கு வாங்கியதற்கு நன்றி!_
-WhatsApp: ${BRAND_WHATSAPP}`
-}
